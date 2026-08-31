@@ -1,4 +1,6 @@
-# 轮盘翻译（Etranslate）
+# ERing
+
+**An easy-to-use radial toolkit for your desktop.**
 
 一个 Windows 桌面效率小工具：**按住鼠标右键拖动**呼出轮盘，选中「翻译」即可把
 **选中的文本**或**截图中的文字**翻译成目标语言；轮盘里还集成了**区域录屏**、
@@ -25,7 +27,7 @@
 ## 📁 目录结构
 
 ```text
-Etranslate/
+ERing/
 ├── main.py                 # 程序入口
 ├── app/                    # 核心源码包
 │   ├── wheel.py            # 轮盘菜单（StarPie 风格双主题）
@@ -114,7 +116,7 @@ py -3 -m venv .venv
 
 ## 📦 打包为独立 exe
 
-双击 **build.bat**（基于 PyInstaller），产物在 `dist\轮盘翻译\` 下。
+双击 **build.bat**（基于 PyInstaller），产物在 `dist\ERing\` 下。
 
 ## 📄 开源协议
 

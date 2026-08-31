@@ -194,7 +194,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.cfg = cfg
         self._balance_provider = balance_provider
-        self.setWindowTitle("轮盘翻译 - 设置")
+        self.setWindowTitle("ERing - 设置")
         self.setWindowIcon(make_icon())
         self.setMinimumSize(900, 600)
         self.resize(920, 640)
@@ -237,7 +237,7 @@ class SettingsDialog(QDialog):
         v = QVBoxLayout(side)
         v.setContentsMargins(16, 22, 16, 16)
         v.setSpacing(2)
-        title = QLabel("轮盘翻译")
+        title = QLabel("ERing")
         title.setObjectName("sideTitle")
         sub = QLabel("截图 / 选中文本 即译")
         sub.setObjectName("sideSub")

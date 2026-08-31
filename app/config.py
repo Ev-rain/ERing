@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-APP_NAME = "轮盘翻译"
+APP_NAME = "ERing"
 # 所有配置、调试日志都放在工程目录下的 data 文件夹里
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "data"
 

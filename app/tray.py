@@ -63,7 +63,7 @@ class Tray(QSystemTrayIcon):
     def __init__(self, qt_app, app_ref):
         super().__init__(make_icon(), qt_app)
         self.app_ref = app_ref
-        self.setToolTip("轮盘翻译：按住鼠标右键拖动呼出轮盘")
+        self.setToolTip("ERing：按住鼠标右键拖动呼出轮盘")
         menu = QMenu()
         self.autostart_action = menu.addAction("开机自启动")
         self.autostart_action.setCheckable(True)
@@ -92,7 +92,7 @@ class Tray(QSystemTrayIcon):
 
     def first_run_notice(self):
         self.showMessage(
-            "轮盘翻译已启动",
+            "ERing 已启动",
             "按住鼠标右键拖动即可呼出轮盘",
             QSystemTrayIcon.MessageIcon.Information,
             5000,

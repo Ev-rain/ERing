@@ -5,10 +5,10 @@ cd /d "%~dp0"
 set RAPID_COLLECT=
 ".venv\Scripts\python.exe" -c "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('rapidocr_onnxruntime') else 1)" >nul 2>&1
 if %errorlevel%==0 set RAPID_COLLECT=--collect-data rapidocr_onnxruntime
-".venv\Scripts\pyinstaller.exe" --noconfirm --clean --windowed --name 轮盘翻译 ^
+".venv\Scripts\pyinstaller.exe" --noconfirm --clean --windowed --name ERing ^
   %RAPID_COLLECT% ^
   --collect-submodules uiautomation ^
   main.py
 echo.
-echo 打包完成：dist\轮盘翻译\ 下的 轮盘翻译.exe 可直接运行
+echo 打包完成：dist\ERing\ 下的 ERing.exe 可直接运行
 pause

@@ -5,7 +5,8 @@ import winreg
 from pathlib import Path
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-VALUE_NAME = "Etranslate"
+VALUE_NAME = "ERing"
+LEGACY_NAME = "Etranslate"  # 旧版本注册表项，检测到后自动迁移
 
 
 def startup_command():
@@ -22,6 +23,16 @@ def is_enabled():
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
             winreg.QueryValueEx(key, VALUE_NAME)
             return True
+    except OSError:
+        pass
+    # 迁移旧名称：旧项存在时视为已启用，并改名为新名称
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            data, kind = winreg.QueryValueEx(key, LEGACY_NAME)
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            winreg.SetValueEx(key, VALUE_NAME, 0, kind, data)
+            winreg.DeleteValue(key, LEGACY_NAME)
+        return True
     except OSError:
         return False
 

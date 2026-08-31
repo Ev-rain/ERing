@@ -92,7 +92,7 @@ class ScreenTranslatorApp:
         self.qt.installEventFilter(self._icon_filter)
         self.cfg = Config()
         configure_logging(self.cfg["enable_logging"])
-        log("=== 轮盘翻译启动 ===")
+        log("=== ERing 启动 ===")
         self.events = queue.Queue()
         self.balance = BalanceProvider(
             get_key=lambda: self.cfg["deepseek"]["api_key"],
@@ -339,7 +339,7 @@ class ScreenTranslatorApp:
 
     def _save_screenshot(self, image):
         self._busy = False
-        folder = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Pictures" / "轮盘翻译"
+        folder = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Pictures" / "ERing"
         try:
             folder.mkdir(parents=True, exist_ok=True)
             path = folder / f"截图_{time.strftime('%Y%m%d_%H%M%S')}.png"
@@ -505,4 +505,3 @@ def main():
         except Exception:
             pass
         raise
-
