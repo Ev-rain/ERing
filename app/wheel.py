@@ -339,13 +339,8 @@ class WheelOverlay(QWidget):
 
         if self._center_text == "退出":
             self._draw_vector_icon(
-                p, "退出", c.x(), c.y() - self._core * 0.12, self._core * 0.28
+                p, "退出", c.x(), c.y(), self._core * 0.32
             )
-            p.setFont(QFont("Microsoft YaHei UI", 10))
-            p.setPen(self._pal("text"))
-            p.drawText(QRectF(c.x() - self._core, c.y() + self._core - 24,
-                              self._core * 2, 22),
-                       Qt.AlignmentFlag.AlignCenter, "退出")
         else:
             # 两行（紧凑居中）：小字「总余额」+ 略大加粗数值；大字「今日消费」
             label = "总余额 "
@@ -425,12 +420,11 @@ class WheelOverlay(QWidget):
             p.drawEllipse(QPointF(cx, cy), r * 0.82, r * 0.82)
             p.setBrush(self._pal("hole"))
             p.drawEllipse(QPointF(cx, cy), r * 0.42, r * 0.42)
-        elif kind == "退出":  # 电源
+        elif kind == "退出":  # X 关闭图标（取消/关闭本次操作）
             p.setPen(pen)
             p.setBrush(Qt.BrushStyle.NoBrush)
-            # 缺口朝上且只留 90°（标准电源图标），竖线从圆心穿出缺口
-            p.drawArc(QRectF(cx - r, cy - r, r * 2, r * 2), 135 * 16, 270 * 16)
-            p.drawLine(QPointF(cx, cy), QPointF(cx, cy - r * 0.55))
+            p.drawLine(QPointF(cx - r, cy - r), QPointF(cx + r, cy + r))
+            p.drawLine(QPointF(cx - r, cy + r), QPointF(cx + r, cy - r))
         else:
             p.setPen(pen)
             p.setBrush(Qt.BrushStyle.NoBrush)
