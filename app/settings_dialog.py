@@ -675,6 +675,12 @@ class SettingsDialog(QDialog):
         open_btn = QPushButton("打开日志文件夹")
         open_btn.clicked.connect(lambda: os.startfile(str(CONFIG_DIR)))
         cv.addWidget(open_btn)
+        log_hint = QLabel(
+            "日志自动保留最近 5 份（含当前，app.log / mouse.log 各自轮转），超出自动清理。"
+        )
+        log_hint.setWordWrap(True)
+        log_hint.setStyleSheet("color:#94A3B8; font-size:12px;")
+        cv.addWidget(log_hint)
         v.addWidget(card)
         v.addStretch(1)
         return page
