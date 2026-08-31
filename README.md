@@ -29,25 +29,32 @@
 
 ```text
 ERing/
-├── main.py                 # 程序入口
-├── app/                    # 核心源码包
-│   ├── wheel.py            # 轮盘菜单（StarPie 风格双主题）
-│   ├── settings_dialog.py  # 设置面板
-│   ├── result_window.py    # 翻译结果浮窗
-│   ├── recorder.py         # 录屏（ffmpeg gdigrab）
-│   ├── tray.py             # 系统托盘
-│   ├── ocr.py / native_ocr.py  # 文字识别
-│   ├── translate.py        # 翻译源
-│   ├── deepseek.py         # 余额/今日消费
-│   ├── autostart.py        # 开机自启动（注册表）
-│   ├── window_icon.py      # 任务栏图标修复
-│   └── assets/             # 图标等资源
-├── native/
-│   ├── wheelhook.cpp/.dll  # C++ 全局鼠标钩子
-│   └── ffmpeg/             # ffmpeg（体积大，未随仓库提交，见下方说明）
-├── data/                   # 运行时数据（日志/设置/录屏，不入库）
+├── src/ERing/              # 主程序源码（对应 StarPie 的 WinPieGestures）
+│   ├── main.py             # 程序入口
+│   ├── app/                # 核心源码包
+│   │   ├── wheel.py        # 轮盘菜单（StarPie 风格双主题）
+│   │   ├── settings_dialog.py  # 设置面板
+│   │   ├── result_window.py    # 翻译结果浮窗
+│   │   ├── recorder.py     # 录屏（ffmpeg gdigrab）
+│   │   ├── tray.py         # 系统托盘
+│   │   ├── ocr.py / native_ocr.py  # 文字识别
+│   │   ├── translate.py    # 翻译源
+│   │   ├── deepseek.py     # 余额/今日消费
+│   │   ├── autostart.py    # 开机自启动（注册表）
+│   │   ├── window_icon.py  # 任务栏图标修复
+│   │   └── assets/         # 图标等资源
+│   ├── native/
+│   │   ├── wheelhook.cpp/.dll  # C++ 全局鼠标钩子
+│   │   └── ffmpeg/         # ffmpeg（体积大，未随仓库提交，见下方说明）
+│   ├── data/               # 运行时数据（日志/设置/录屏，不入库）
+│   ├── requirements.txt
+│   └── requirements-ocr.txt
+├── tests/                  # 自检脚本
+├── releases/               # 版本发布约定
+├── assets/                 # README 等文档素材
+├── CHANGELOG.md / CONTRIBUTING.md / SECURITY.md / README_EN.md
 ├── 安装依赖.bat / 启动.bat / build.bat
-└── requirements.txt
+└── LICENSE
 ```
 
 ## 🚀 快速开始
@@ -55,7 +62,7 @@ ERing/
 环境要求：Windows 10/11，Python 3.10+（安装时勾选 “Add to PATH” 或装有 `py` 启动器）。
 
 1. 双击 **安装依赖.bat**（首次运行：创建 `.venv` 虚拟环境并安装依赖）；
-2. 如果 `native\wheelhook.dll` 不存在，双击 **native\build.bat** 编译 C++ 钩子
+2. 如果 `src\ERing\native\wheelhook.dll` 不存在，双击 **src\ERing\native\build.bat** 编译 C++ 钩子
    （需要 MSYS2/MinGW 的 g++；没有则程序会自动回退纯 Python 钩子）；
 3. 双击 **启动.bat** 运行。
 
@@ -63,8 +70,8 @@ ERing/
 
 ```bat
 py -3 -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\pythonw.exe main.py
+.venv\Scripts\python.exe -m pip install -r src\ERing\requirements.txt
+.venv\Scripts\pythonw.exe src\ERing\main.py
 ```
 
 ### 可选依赖：RapidOCR
@@ -73,15 +80,15 @@ py -3 -m venv .venv
 额外执行一次即可（约 +220MB，cv2/onnxruntime 体积较大）：
 
 ```bat
-.venv\Scripts\python.exe -m pip install -r requirements-ocr.txt
+.venv\Scripts\python.exe -m pip install -r src\ERing\requirements-ocr.txt
 ```
 
 未安装时，设置里的 RapidOCR 选项会置灰；OCR 默认使用 Windows 原生引擎。
 
 ### ffmpeg 说明
 
-录屏依赖 ffmpeg。`native\ffmpeg\` 体积较大（约 68MB），未包含在 Git 仓库中；
-请自行放入 `native\ffmpeg\ffmpeg.exe`（推荐从 [gyan.dev ffmpeg builds](https://www.gyan.dev/ffmpeg/builds/)
+录屏依赖 ffmpeg。`src\ERing\native\ffmpeg\` 体积较大（约 68MB），未包含在 Git 仓库中；
+请自行放入 `src\ERing\native\ffmpeg\ffmpeg.exe`（推荐从 [gyan.dev ffmpeg builds](https://www.gyan.dev/ffmpeg/builds/)
 下载 Essentials 版），或把 ffmpeg 加入 PATH，程序会自动找到。
 
 ## 🎯 使用说明

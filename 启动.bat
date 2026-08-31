@@ -2,7 +2,7 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 if exist ".venv\Scripts\pythonw.exe" (
-  start "" ".venv\Scripts\pythonw.exe" main.py
+  start "" ".venv\Scripts\pythonw.exe" "src\ERing\main.py"
 ) else (
-  start "" pythonw main.py
+  start "" pythonw "src\ERing\main.py"
 )
