@@ -419,16 +419,16 @@ class SettingsDialog(QDialog):
         self._form_row(ov, "OCR 引擎", self.ocr_engine)
 
         self.rapid_installed = rapid_installed
-        if not rapid_installed:
-            install_row = QHBoxLayout()
-            install_row.setSpacing(10)
-            self.rapid_btn = QPushButton("安装 RapidOCR（离线高精度，约 240MB）")
-            self.rapid_btn.clicked.connect(self._install_rapid)
-            self.rapid_status = QLabel("")
-            self.rapid_status.setStyleSheet("color:#64748B; font-size:12px;")
-            install_row.addWidget(self.rapid_btn)
-            install_row.addWidget(self.rapid_status, 1)
-            ov.addLayout(install_row)
+        install_row = QHBoxLayout()
+        install_row.setSpacing(10)
+        self.rapid_btn = QPushButton()
+        self.rapid_btn.clicked.connect(self._on_rapid_btn)
+        self.rapid_status = QLabel("")
+        self.rapid_status.setStyleSheet("color:#64748B; font-size:12px;")
+        install_row.addWidget(self.rapid_btn)
+        install_row.addWidget(self.rapid_status, 1)
+        ov.addLayout(install_row)
+        self._refresh_rapid_ui()
 
         hint = QLabel(
             "提示：截图识别效果与文字大小、清晰度有关。Windows 原生 OCR 快但准确率一般；"
@@ -441,6 +441,20 @@ class SettingsDialog(QDialog):
         v.addWidget(ocr_card)
         v.addStretch(1)
         return page
+
+    def _refresh_rapid_ui(self):
+        if self.rapid_installed:
+            self.rapid_btn.setText("卸载 RapidOCR（释放约 240MB）")
+            self.rapid_btn.setEnabled(True)
+        else:
+            self.rapid_btn.setText("安装 RapidOCR（离线高精度，约 240MB）")
+            self.rapid_btn.setEnabled(True)
+
+    def _on_rapid_btn(self):
+        if self.rapid_installed:
+            self._uninstall_rapid()
+        else:
+            self._install_rapid()
 
     def _install_rapid(self):
         import subprocess
@@ -469,19 +483,65 @@ class SettingsDialog(QDialog):
         self._rapid_worker.done.connect(self._on_install_done)
         self._rapid_worker.start(work)
 
+    def _uninstall_rapid(self):
+        import subprocess
+        import sys
+
+        self.rapid_btn.setEnabled(False)
+        self.rapid_status.setText("正在卸载…")
+        packages = [
+            "rapidocr-onnxruntime",
+            "opencv-python",
+            "onnxruntime",
+            "numpy",
+            "shapely",
+        ]
+
+        def work():
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-m", "pip", "uninstall", "-y", *packages],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                ok = proc.returncode == 0
+                detail = (proc.stderr or proc.stdout or "")[-300:]
+                return ok, detail
+            except Exception as exc:  # noqa: BLE001
+                return False, str(exc)
+
+        self._rapid_worker = _InstallWorker()
+        self._rapid_worker.done.connect(self._on_uninstall_done)
+        self._rapid_worker.start(work)
+
     def _on_install_done(self, result):
         ok, _detail = result
-        self.rapid_btn.setEnabled(True)
         if ok:
             self.rapid_status.setText("安装成功 ✓（已启用 RapidOCR 选项）")
             item = self.ocr_engine.model().item(1)
             item.setEnabled(True)
             item.setToolTip("")
-            self.rapid_btn.setText("RapidOCR 已安装")
-            self.rapid_btn.setEnabled(False)
             self.rapid_installed = True
         else:
             self.rapid_status.setText("安装失败，请检查网络后重试")
+        self._refresh_rapid_ui()
+
+    def _on_uninstall_done(self, result):
+        ok, _detail = result
+        if ok:
+            self.rapid_installed = False
+            item = self.ocr_engine.model().item(1)
+            item.setEnabled(False)
+            item.setToolTip("未安装：点击下方按钮安装")
+            if self.ocr_engine.currentData() == "rapid":
+                self.ocr_engine.setCurrentIndex(
+                    self.ocr_engine.findData("native")
+                )
+            self.rapid_status.setText("卸载完成（已释放约 240MB）")
+        else:
+            self.rapid_status.setText("卸载失败，可手动执行 pip uninstall")
+        self._refresh_rapid_ui()
 
     # ---------- 录屏页 ----------
     def _build_record_page(self):
