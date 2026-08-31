@@ -29,6 +29,7 @@ from app.autostart import is_enabled as autostart_enabled
 from app.autostart import set_enabled as autostart_set_enabled
 from app.deepseek import fetch_balance
 from app.log_utils import configure as configure_logging
+from app.paths import project_root
 from app.tray import make_icon
 
 PROVIDERS = [
@@ -461,7 +462,7 @@ class SettingsDialog(QDialog):
         import sys
         from pathlib import Path
 
-        req = Path(__file__).resolve().parent.parent / "requirements-ocr.txt"
+        req = project_root() / "requirements-ocr.txt"
         self.rapid_btn.setEnabled(False)
         self.rapid_status.setText("正在安装（约 1~3 分钟）…")
 

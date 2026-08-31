@@ -117,7 +117,16 @@ py -3 -m venv .venv
 
 ## 📦 打包为独立 exe
 
-双击 **build.bat**（基于 PyInstaller），产物在 `dist\ERing\` 下。
+双击 **build.bat**（基于 PyInstaller），产物在 `dist\ERing\ERing.exe`（约 130~350MB，
+取决于打包机是否安装了 RapidOCR）。exe 可直接拷贝到其他 64 位 Windows 10/11 上运行，
+无需安装 Python；运行时会在 exe 同级自动创建 `data\`（配置/日志/录屏）目录。
+
+打包/分发注意：
+
+- **ffmpeg**：exe 不内置，需把 `ffmpeg.exe` 放到 exe 同级的 `native\ffmpeg\` 下，
+  或加入系统 PATH，否则录屏不可用；
+- 在未安装 RapidOCR 的机器上打包可显著减小体积（不含 cv2/onnxruntime/numpy）；
+- 原生 OCR（Windows.Media.Ocr）需要目标系统安装了对应语言包。
 
 ## 📄 开源协议
 

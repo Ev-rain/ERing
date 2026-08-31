@@ -3,9 +3,11 @@
 import json
 from pathlib import Path
 
+from app.paths import project_root
+
 APP_NAME = "ERing"
 # 所有配置、调试日志都放在工程目录下的 data 文件夹里
-CONFIG_DIR = Path(__file__).resolve().parent.parent / "data"
+CONFIG_DIR = project_root() / "data"
 
 DEFAULTS = {
     "drag_threshold": 14,        # 右键拖动多少像素触发轮盘

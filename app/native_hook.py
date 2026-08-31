@@ -6,8 +6,21 @@ import ctypes
 from pathlib import Path
 
 from app.log_utils import log
+from app.paths import project_root, resource_path
 
-DLL_PATH = Path(__file__).resolve().parent.parent / "native" / "wheelhook.dll"
+
+def _find_dll():
+    candidates = [
+        project_root() / "native" / "wheelhook.dll",
+        resource_path("native") / "wheelhook.dll",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
+
+
+DLL_PATH = _find_dll()
 
 TriggerCb = ctypes.WINFUNCTYPE(
     None, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int

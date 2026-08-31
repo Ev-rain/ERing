@@ -8,7 +8,8 @@ Win32 API 把 .ico 灌到每个窗口（兼容 Windows 11 KB5051987 之后的行
 """
 import ctypes
 from ctypes import wintypes
-from pathlib import Path
+
+from app.paths import resource_path
 
 WM_SETICON = 0x0080
 ICON_BIG = 1
@@ -49,7 +50,7 @@ def _load_hicon():
     global _hicon
     if _hicon:
         return _hicon
-    ico = Path(__file__).resolve().parent / "assets" / "tray.ico"
+    ico = resource_path("assets") / "tray.ico"
     if not ico.exists():
         return None
     # 加载 256px 大图，让系统在任意 DPI 下向下缩放，避免小图放大发虚

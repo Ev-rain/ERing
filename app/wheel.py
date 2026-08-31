@@ -16,6 +16,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 
 from app.log_utils import log
+from app.paths import resource_path
 
 DEFAULT_LABELS = ["翻译", "录屏", "设置"]
 CENTER_ZONE = -2  # 圆心（取消操作/余额）
@@ -437,8 +438,7 @@ class WheelOverlay(QWidget):
     def _translate_glyph_pixmap(self, theme):
         """vivo 翻译机图标图形（中A + 环绕箭头），按主题着色并缓存。"""
         if theme not in self._glyph_cache:
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "assets", "vivo_translate.png")
+            path = str(resource_path("assets") / "vivo_translate.png")
             raw = QPixmap(path)
             if raw.isNull():
                 log(f"translate glyph asset missing: {path}")

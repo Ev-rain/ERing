@@ -4,13 +4,17 @@ import sys
 import winreg
 from pathlib import Path
 
+from app.paths import is_frozen, project_root
+
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 VALUE_NAME = "ERing"
 LEGACY_NAME = "Etranslate"  # 旧版本注册表项，检测到后自动迁移
 
 
 def startup_command():
-    root = Path(__file__).resolve().parent.parent
+    if is_frozen():
+        return f'"{sys.executable}"'
+    root = project_root()
     pyw = root / ".venv" / "Scripts" / "pythonw.exe"
     if not pyw.exists():
         pyw = Path(sys.executable)

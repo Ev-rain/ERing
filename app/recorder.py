@@ -6,8 +6,21 @@ import threading
 from pathlib import Path
 
 from app.log_utils import log
+from app.paths import project_root, resource_path
 
-FFMPEG_DIR = Path(__file__).resolve().parent.parent / "native" / "ffmpeg"
+
+def _find_ffmpeg_dir():
+    candidates = [
+        project_root() / "native" / "ffmpeg",   # exe 目录 / 项目根
+        resource_path("native") / "ffmpeg",     # 打进安装包时
+    ]
+    for c in candidates:
+        if (c / "ffmpeg.exe").exists():
+            return c
+    return candidates[0]
+
+
+FFMPEG_DIR = _find_ffmpeg_dir()
 
 
 def find_ffmpeg():

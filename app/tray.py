@@ -8,6 +8,7 @@ from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from app.autostart import is_enabled, set_enabled
+from app.paths import resource_path
 
 
 def _render_icon(size):
@@ -36,8 +37,7 @@ def _render_icon(size):
     p.setPen(QPen(QColor(255, 255, 255, 70), max(1.0, s * 0.016)))
     p.drawEllipse(c, s * 0.141, s * 0.141)
     # 中心叠加 vivo 翻译机图形（中A + 环绕箭头）
-    glyph_path = Path(__file__).resolve().parent / "assets" / "vivo_translate.png"
-    glyph = QPixmap(str(glyph_path))
+    glyph = QPixmap(str(resource_path("assets") / "vivo_translate.png"))
     if not glyph.isNull():
         gw = s * 0.594
         gh = gw * glyph.height() / max(1, glyph.width())
