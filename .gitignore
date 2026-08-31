@@ -14,7 +14,6 @@ native/ffmpeg/
 # ---- 打包产物 ----
 build/
 dist/
-releases/release*/
 *.spec
 
 # ---- 测试临时文件 ----
