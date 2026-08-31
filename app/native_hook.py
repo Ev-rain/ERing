@@ -1,0 +1,135 @@
+# -*- coding: utf-8 -*-
+"""C++ 钩子 DLL 封装（架构参考 StarPie）：
+钩子吞掉右键按下；普通单击由主线程重放完整点击；手势走轮盘。
+加载失败时由主程序回退到纯 Python 钩子。"""
+import ctypes
+from pathlib import Path
+
+from app.log_utils import log
+
+DLL_PATH = Path(__file__).resolve().parent.parent / "native" / "wheelhook.dll"
+
+TriggerCb = ctypes.WINFUNCTYPE(
+    None, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int
+)
+ReleaseCb = ctypes.WINFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
+NormalUpCb = ctypes.WINFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
+LeftClickCb = ctypes.WINFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
+MoveCb = ctypes.WINFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
+
+
+class NativeHook:
+    def __init__(self, on_wheel_trigger=None, on_wheel_release=None, on_left_click=None,
+                 on_mouse_move=None, on_normal_up=None):
+        self.on_wheel_trigger = on_wheel_trigger
+        self.on_wheel_release = on_wheel_release
+        self.on_left_click = on_left_click
+        self.on_mouse_move = on_mouse_move
+        self.on_normal_up = on_normal_up
+        self._dll = None
+        self._cbs = []  # 保持回调引用，防止被 GC
+        self._threshold = 14
+        self.suppress = False
+
+    @classmethod
+    def available(cls):
+        try:
+            ctypes.CDLL(str(DLL_PATH))
+            return True
+        except Exception:
+            return False
+
+    def _load(self):
+        if self._dll is None:
+            self._dll = ctypes.CDLL(str(DLL_PATH))
+            self._dll.configure.argtypes = [TriggerCb, ReleaseCb, NormalUpCb, LeftClickCb, MoveCb]
+            self._dll.start_hook.argtypes = [TriggerCb, ReleaseCb, NormalUpCb, LeftClickCb, MoveCb]
+            self._dll.start_hook.restype = ctypes.c_int
+            self._dll.stop_hook.argtypes = []
+            self._dll.set_drag_threshold.argtypes = [ctypes.c_int]
+            self._dll.set_ignore_next_click.argtypes = []
+            self._dll.get_event_count.argtypes = []
+            self._dll.get_event_count.restype = ctypes.c_long
+            self._dll.debug_feed.argtypes = [
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ]
+        return self._dll
+
+    def set_drag_threshold(self, px):
+        self._threshold = max(4, int(px))
+        if self._dll:
+            self._dll.set_drag_threshold(self._threshold)
+
+    def set_suppress(self, value):
+        self.suppress = bool(value)  # 兼容接口
+
+    def set_ignore_next_click(self):
+        if self._dll:
+            try:
+                self._dll.set_ignore_next_click()
+            except Exception:
+                pass
+
+    def event_count(self):
+        if self._dll:
+            try:
+                return int(self._dll.get_event_count())
+            except Exception:
+                pass
+        return 0
+
+    def start(self):
+        dll = self._load()
+        self._cbs = [
+            TriggerCb(self._on_trigger),
+            ReleaseCb(self._on_release),
+            NormalUpCb(self._on_normal_up),
+            LeftClickCb(self._on_left),
+            MoveCb(self._on_move),
+        ]
+        dll.set_drag_threshold(self._threshold)
+        ok = dll.start_hook(*self._cbs)
+        log(f"native hook start: {bool(ok)}")
+
+    def stop(self):
+        if self._dll:
+            try:
+                self._dll.stop_hook()
+            except Exception:
+                pass
+        self._cbs = []
+
+    def _on_trigger(self, x, y, ox, oy):
+        if self.on_wheel_trigger:
+            try:
+                self.on_wheel_trigger(x, y, ox, oy)
+            except Exception:
+                pass
+
+    def _on_release(self, x, y):
+        if self.on_wheel_release:
+            try:
+                self.on_wheel_release(x, y)
+            except Exception:
+                pass
+
+    def _on_normal_up(self, x, y):
+        if self.on_normal_up:
+            try:
+                self.on_normal_up(x, y)
+            except Exception:
+                pass
+
+    def _on_left(self, x, y):
+        if self.on_left_click:
+            try:
+                self.on_left_click(x, y)
+            except Exception:
+                pass
+
+    def _on_move(self, x, y):
+        if self.on_mouse_move:
+            try:
+                self.on_mouse_move(x, y)
+            except Exception:
+                pass

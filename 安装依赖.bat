@@ -1,0 +1,14 @@
+@echo off
+chcp 65001 >nul
+cd /d "%~dp0"
+where py >nul 2>nul
+if %errorlevel%==0 (
+  py -3 -m venv .venv
+) else (
+  python -m venv .venv
+)
+".venv\Scripts\python.exe" -m pip install --upgrade pip
+".venv\Scripts\python.exe" -m pip install -r requirements.txt
+echo.
+echo 依赖安装完成！双击 启动.bat 运行。
+pause
