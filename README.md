@@ -64,6 +64,17 @@ py -3 -m venv .venv
 .venv\Scripts\pythonw.exe main.py
 ```
 
+### 可选依赖：RapidOCR
+
+默认依赖已尽量精简（约 300MB）。如需「RapidOCR 高精度离线识别」选项，
+额外执行一次即可（约 +220MB，cv2/onnxruntime 体积较大）：
+
+```bat
+.venv\Scripts\python.exe -m pip install -r requirements-ocr.txt
+```
+
+未安装时，设置里的 RapidOCR 选项会置灰；OCR 默认使用 Windows 原生引擎。
+
 ### ffmpeg 说明
 
 录屏依赖 ffmpeg。`native\ffmpeg\` 体积较大（约 68MB），未包含在 Git 仓库中；
@@ -89,7 +100,7 @@ py -3 -m venv .venv
 
 - **翻译设置**：目标语言、自动判断方向、翻译面板主题（暗/亮）、翻译源、OpenAI 兼容接口；
 - **轮盘与识别**：拖动触发距离、轮盘主题、弹出动画速度、外甩取消及距离、OCR 引擎
-  （默认 Windows 原生 OCR，可切 RapidOCR）；
+  （默认 Windows 原生 OCR；RapidOCR 为可选安装）；
 - **录屏设置**：帧率（15/30/60）、鼠标指针、MP4/GIF、保存位置与「打开录屏文件」；
 - **DeepSeek 账户**：API Key、查询余额、今日消费（按当日余额差值统计，充值增长自动忽略）；
 - **通用**：开机自启动、关闭设置窗口行为（最小化到托盘/直接关闭）、记住翻译窗口大小、调试日志。

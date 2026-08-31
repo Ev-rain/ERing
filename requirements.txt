@@ -2,7 +2,6 @@ PySide6-Essentials>=6.6.0
 mss>=9.0.1
 Pillow>=10.0.0
 requests>=2.31.0
-rapidocr_onnxruntime>=1.4.0
 pyperclip>=1.8.2
 uiautomation>=2.0.18
 winsdk>=1.0.0

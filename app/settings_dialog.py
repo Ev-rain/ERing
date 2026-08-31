@@ -393,7 +393,21 @@ class SettingsDialog(QDialog):
         self.ocr_engine = QComboBox()
         self.ocr_engine.addItem("Windows 原生 OCR（快，推荐）", "native")
         self.ocr_engine.addItem("RapidOCR（高精度，离线）", "rapid")
+        try:
+            import importlib.util
+
+            rapid_installed = (
+                importlib.util.find_spec("rapidocr_onnxruntime") is not None
+            )
+        except Exception:
+            rapid_installed = False
+        if not rapid_installed:
+            item = self.ocr_engine.model().item(1)
+            item.setEnabled(False)
+            item.setToolTip("未安装：pip install -r requirements-ocr.txt")
         idx = self.ocr_engine.findData(self.cfg["ocr_engine"])
+        if idx == 1 and not rapid_installed:
+            idx = 0  # 未安装 RapidOCR 时回退到原生
         self.ocr_engine.setCurrentIndex(max(0, idx))
         self._form_row(ov, "OCR 引擎", self.ocr_engine)
         v.addWidget(ocr_card)

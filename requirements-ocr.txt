@@ -1,0 +1,2 @@
+# 可选：RapidOCR 高精度离线识别（默认不安装，可显著减小依赖体积）
+rapidocr_onnxruntime>=1.4.0
