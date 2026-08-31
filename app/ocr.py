@@ -4,6 +4,7 @@ import io
 import threading
 import time
 
+from PySide6.QtCore import Qt
 from PIL import Image
 
 from app.log_utils import log
@@ -58,6 +59,7 @@ class OcrEngine:
         threading.Thread(target=work, daemon=True, name="ocr-preload").start()
 
     def recognize(self, qimage) -> str:
+        qimage = self._preprocess(qimage)
         if self._mode == "native":
             try:
                 from app.native_ocr import NativeOcr
@@ -67,6 +69,21 @@ class OcrEngine:
             except Exception as exc:  # noqa: BLE001
                 log(f"Windows OCR 失败，回退 RapidOCR: {exc}")
         return self._recognize_rapid(qimage)
+
+    @staticmethod
+    def _preprocess(qimage):
+        """小图放大 2 倍再识别，显著提升小字/模糊截图的识别率。"""
+        try:
+            w, h = qimage.width(), qimage.height()
+            if 0 < max(w, h) < 1200:
+                qimage = qimage.scaled(
+                    w * 2, h * 2,
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+        except Exception:
+            pass
+        return qimage
 
     def _recognize_rapid(self, qimage) -> str:
         from PySide6.QtCore import QBuffer

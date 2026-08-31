@@ -182,6 +182,13 @@ class _BalanceWorker(QObject):
     done = Signal(object)
 
 
+class _InstallWorker(QObject):
+    done = Signal(object)
+
+    def start(self, fn):
+        threading.Thread(target=lambda: self.done.emit(fn()), daemon=True).start()
+
+
 class SettingsDialog(QDialog):
     def __init__(self, cfg, parent=None, balance_provider=None):
         super().__init__(parent)
@@ -410,9 +417,71 @@ class SettingsDialog(QDialog):
             idx = 0  # 未安装 RapidOCR 时回退到原生
         self.ocr_engine.setCurrentIndex(max(0, idx))
         self._form_row(ov, "OCR 引擎", self.ocr_engine)
+
+        self.rapid_installed = rapid_installed
+        if not rapid_installed:
+            install_row = QHBoxLayout()
+            install_row.setSpacing(10)
+            self.rapid_btn = QPushButton("安装 RapidOCR（离线高精度，约 240MB）")
+            self.rapid_btn.clicked.connect(self._install_rapid)
+            self.rapid_status = QLabel("")
+            self.rapid_status.setStyleSheet("color:#64748B; font-size:12px;")
+            install_row.addWidget(self.rapid_btn)
+            install_row.addWidget(self.rapid_status, 1)
+            ov.addLayout(install_row)
+
+        hint = QLabel(
+            "提示：截图识别效果与文字大小、清晰度有关。Windows 原生 OCR 快但准确率一般；"
+            "RapidOCR 使用离线模型，小字/模糊字识别率更高。程序已对小截图自动放大 2 倍"
+            "后再识别，仍不理想时可安装 RapidOCR 并切到该引擎。"
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color:#64748B; font-size:12px;")
+        ov.addWidget(hint)
         v.addWidget(ocr_card)
         v.addStretch(1)
         return page
+
+    def _install_rapid(self):
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        req = Path(__file__).resolve().parent.parent / "requirements-ocr.txt"
+        self.rapid_btn.setEnabled(False)
+        self.rapid_status.setText("正在安装（约 1~3 分钟）…")
+
+        def work():
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-r", str(req)],
+                    capture_output=True,
+                    text=True,
+                    timeout=900,
+                )
+                ok = proc.returncode == 0
+                detail = (proc.stderr or proc.stdout or "")[-300:]
+                return ok, detail
+            except Exception as exc:  # noqa: BLE001
+                return False, str(exc)
+
+        self._rapid_worker = _InstallWorker()
+        self._rapid_worker.done.connect(self._on_install_done)
+        self._rapid_worker.start(work)
+
+    def _on_install_done(self, result):
+        ok, _detail = result
+        self.rapid_btn.setEnabled(True)
+        if ok:
+            self.rapid_status.setText("安装成功 ✓（已启用 RapidOCR 选项）")
+            item = self.ocr_engine.model().item(1)
+            item.setEnabled(True)
+            item.setToolTip("")
+            self.rapid_btn.setText("RapidOCR 已安装")
+            self.rapid_btn.setEnabled(False)
+            self.rapid_installed = True
+        else:
+            self.rapid_status.setText("安装失败，请检查网络后重试")
 
     # ---------- 录屏页 ----------
     def _build_record_page(self):
