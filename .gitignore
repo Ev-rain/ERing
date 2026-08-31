@@ -15,6 +15,7 @@ native/ffmpeg/
 build/
 dist/
 *.spec
+releases/release*
 
 # ---- 测试临时文件 ----
 _ocr_test.png
