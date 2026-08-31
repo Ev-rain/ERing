@@ -428,8 +428,8 @@ class WheelOverlay(QWidget):
         elif kind == "退出":  # 电源
             p.setPen(pen)
             p.setBrush(Qt.BrushStyle.NoBrush)
-            # 缺口朝上（标准电源图标），竖线从圆心穿出缺口
-            p.drawArc(QRectF(cx - r, cy - r, r * 2, r * 2), 150 * 16, 240 * 16)
+            # 缺口朝上且只留 90°（标准电源图标），竖线从圆心穿出缺口
+            p.drawArc(QRectF(cx - r, cy - r, r * 2, r * 2), 135 * 16, 270 * 16)
             p.drawLine(QPointF(cx, cy), QPointF(cx, cy - r * 0.55))
         else:
             p.setPen(pen)
