@@ -32,6 +32,14 @@ def _pick_target(text, cfg):
     return cfg.get("target_lang", "zh-CN")
 
 
+def _is_unchanged(text, result):
+    """翻译结果等于原文（忽略空白/大小写）时视为未翻译。"""
+    if not result:
+        return True
+    norm = lambda s: re.sub(r"\s+", "", s or "").lower()
+    return norm(text) == norm(result)
+
+
 def translate_text(text, cfg):
     text = (text or "").strip()
     if not text:
@@ -53,6 +61,8 @@ def translate_text(text, cfg):
     if provider in ("auto", "mymemory"):
         try:
             result = _mymemory(text, to)
+            if _is_unchanged(text, result):
+                raise RuntimeError("返回原文（未翻译）")
             _cache_put(cache_key, result, "MyMemory")
             return True, result, "MyMemory"
         except Exception as exc:  # noqa: BLE001
@@ -60,6 +70,8 @@ def translate_text(text, cfg):
     if provider in ("auto", "google"):
         try:
             result = _google(text, to)
+            if _is_unchanged(text, result):
+                raise RuntimeError("返回原文（未翻译）")
             _cache_put(cache_key, result, "Google")
             return True, result, "Google"
         except Exception as exc:  # noqa: BLE001
@@ -67,6 +79,8 @@ def translate_text(text, cfg):
     if provider in ("auto", "edge"):
         try:
             result = _edge(text, to)
+            if _is_unchanged(text, result):
+                raise RuntimeError("返回原文（未翻译）")
             _cache_put(cache_key, result, "Edge")
             return True, result, "Edge"
         except Exception as exc:  # noqa: BLE001
@@ -78,6 +92,8 @@ def translate_text(text, cfg):
             deepseek_key = cfg.get("deepseek", {}).get("api_key", "")
             used_deepseek = not cfg.get("openai", {}).get("base_url") and deepseek_key
             result = _openai(text, to, cfg["openai"], deepseek_key)
+            if _is_unchanged(text, result):
+                raise RuntimeError("返回原文（未翻译）")
             provider_used = "DeepSeek" if used_deepseek else "OpenAI 兼容"
             _cache_put(cache_key, result, provider_used)
             return True, result, provider_used

@@ -18,6 +18,8 @@
 - 录屏区域宽高为奇数时输出 0KB（自动取偶）；
 - pythonw 任务栏显示 Python 图标（AppUserModelID + 原生图标注入）；
 - 设置面板勾选框、下拉箭头样式与整体风格统一。
+- 单个英文单词（如 upper）被 MyMemory 返回原文时误报成功，
+  现自动跳过并切换其他翻译源（Google / Edge / DeepSeek）。
 
 ### 说明
 - 大量参考 [StarPie](https://github.com/SoftBlack42/StarPie) 的美术风格与交互设计。
