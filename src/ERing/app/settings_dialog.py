@@ -397,6 +397,25 @@ class SettingsDialog(QDialog):
         wv.addLayout(sub_row)
         v.addWidget(wheel_card)
 
+        fs_card, fsv = self._card("全屏 / 独占应用")
+        self.fullscreen_check = QCheckBox("全屏/独占应用在前台时隐藏（避免游戏等误触发）")
+        self.fullscreen_check.setChecked(bool(self.cfg["suppress_fullscreen"]))
+        self._form_row(fsv, "前台隐藏", self.fullscreen_check)
+        wl_text = ", ".join(str(x) for x in (self.cfg["fullscreen_whitelist"] or []))
+        self.fullscreen_edit = QLineEdit(wl_text)
+        self.fullscreen_edit.setPlaceholderText(
+            "例如：vlc.exe, mpv.exe（进程名，逗号分隔）"
+        )
+        self._form_row(fsv, "白名单", self.fullscreen_edit)
+        fs_hint = QLabel(
+            "白名单内的全屏应用仍可呼出轮盘。进程名可在任务管理器的"
+            "“详细信息”列查看，只填名字即可（如 chrome.exe、vlc.exe）。"
+        )
+        fs_hint.setWordWrap(True)
+        fs_hint.setStyleSheet("color:#94A3B8; font-size:12px;")
+        fsv.addWidget(fs_hint)
+        v.addWidget(fs_card)
+
         ocr_card, ov = self._card("文字识别（OCR）")
         self.ocr_engine = QComboBox()
         self.ocr_engine.addItem("Windows 原生 OCR（快，推荐）", "native")
@@ -741,6 +760,11 @@ class SettingsDialog(QDialog):
         self.cfg["wheel_anim_speed"] = self.anim_speed.currentData()
         self.cfg["enable_outer_escape"] = self.escape_check.isChecked()
         self.cfg["outer_escape_distance"] = self.escape_dist.value()
+        self.cfg["suppress_fullscreen"] = self.fullscreen_check.isChecked()
+        raw = self.fullscreen_edit.text().replace("，", ",").replace(" ", ",")
+        self.cfg["fullscreen_whitelist"] = [
+            t.strip().lower() for t in raw.split(",") if t.strip()
+        ]
         self.cfg["record_fps"] = self.rec_fps.currentData()
         self.cfg["record_mouse"] = self.rec_mouse.isChecked()
         self.cfg["record_format"] = self.rec_fmt.currentData()

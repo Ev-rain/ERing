@@ -35,6 +35,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QWidget
 from app.config import Config, CONFIG_DIR
 from app.deepseek import BalanceProvider
 from app.dpi import phys_to_logical, primary_dpr
+from app.fullscreen import fullscreen_should_hide
 from app.log_utils import configure as configure_logging
 from app.log_utils import log
 from app.mouse_hook import MouseHook
@@ -158,6 +159,11 @@ class ScreenTranslatorApp:
                 kind = ev[0]
                 if kind == "trigger":
                     if not self._busy:
+                        if self._fullscreen_suppressed():
+                            # 全屏/独占应用在前台且不在白名单：不弹轮盘，
+                            # 把右键单击补发给原程序，避免游戏等被误触发
+                            self._replay_right_click()
+                            return
                         # 圆心 = 按下右键的位置；方向判定以此为基准，严格对应拖动方向
                         p = phys_to_logical(ev[3], ev[4])
                         self._capture_focus()
@@ -197,6 +203,14 @@ class ScreenTranslatorApp:
                             pass
         except queue.Empty:
             pass
+
+    def _fullscreen_suppressed(self):
+        try:
+            if not self.cfg["suppress_fullscreen"]:
+                return False
+            return fullscreen_should_hide(self.cfg["fullscreen_whitelist"])
+        except Exception:
+            return False
 
     # ---------- 轮盘动作 ----------
     def on_action(self, index):

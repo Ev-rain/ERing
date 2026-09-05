@@ -22,6 +22,8 @@ DEFAULTS = {
     "wheel_theme": "dark",       # dark=暗色 | light=亮色（轮盘主题）
     "result_theme": "light",     # dark=暗色 | light=亮色（翻译结果面板主题）
     "wheel_anim_speed": "normal",# fast=快 | normal=标准 | slow=慢（弹出动画）
+    "suppress_fullscreen": True, # 全屏/独占应用在前台时隐藏（避免游戏误用）
+    "fullscreen_whitelist": [],  # 白名单：这些全屏应用仍可调用（进程名列表）
     "enable_outer_escape": True, # 外甩取消
     "outer_escape_distance": 160,# 外甩取消距离（px，140~320）
     "record_fps": 30,          # 录屏帧率
