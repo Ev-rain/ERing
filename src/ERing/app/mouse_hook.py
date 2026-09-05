@@ -134,6 +134,16 @@ class MouseHook:
             self._event_count += 1  # 心跳
             data = ctypes.cast(lParam, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
             x, y = data.pt.x, data.pt.y
+            # 抑制模式（全屏应用前台且不在白名单）：全部放行，程序暂停运行
+            if self.suppress:
+                if wParam == WM_RBUTTONDOWN:
+                    self._r_down = False
+                    self.wheel_active = False
+                    self._down_pos = None
+                    self._down_time = 0.0
+                    self._ignore_down = False
+                    self._ignore_up = False
+                return user32.CallNextHookEx(self._hook, nCode, wParam, lParam)
             if wParam == WM_RBUTTONDOWN and self._ignore_down:
                 self._ignore_down = False
                 return user32.CallNextHookEx(self._hook, nCode, wParam, lParam)

@@ -60,6 +60,7 @@ class NativeHook:
             self._dll.start_hook.restype = ctypes.c_int
             self._dll.stop_hook.argtypes = []
             self._dll.set_drag_threshold.argtypes = [ctypes.c_int]
+            self._dll.set_suppress.argtypes = [ctypes.c_int]
             self._dll.set_ignore_next_click.argtypes = []
             self._dll.get_event_count.argtypes = []
             self._dll.get_event_count.restype = ctypes.c_long
@@ -74,7 +75,12 @@ class NativeHook:
             self._dll.set_drag_threshold(self._threshold)
 
     def set_suppress(self, value):
-        self.suppress = bool(value)  # 兼容接口
+        self.suppress = bool(value)
+        if self._dll:
+            try:
+                self._dll.set_suppress(1 if value else 0)
+            except Exception:
+                pass
 
     def set_ignore_next_click(self):
         if self._dll:
@@ -101,6 +107,7 @@ class NativeHook:
             MoveCb(self._on_move),
         ]
         dll.set_drag_threshold(self._threshold)
+        self.set_suppress(self.suppress)
         ok = dll.start_hook(*self._cbs)
         log(f"native hook start: {bool(ok)}")
 

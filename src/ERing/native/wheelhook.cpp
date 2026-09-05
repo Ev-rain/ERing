@@ -31,6 +31,7 @@ static bool g_wheel_active = false;
 static volatile bool g_ignore_down = false;
 static volatile bool g_ignore_up = false;
 static volatile LONG g_event_count = 0;
+static volatile LONG g_suppress = 0;
 
 #define LLMHF_INJECTED 0x00000001
 #define WATCHDOG_MS 10000
@@ -41,6 +42,20 @@ static bool handle_event(int nCode, WPARAM wParam, LPARAM lParam) {
     MSLLHOOKSTRUCT *ms = reinterpret_cast<MSLLHOOKSTRUCT *>(lParam);
     int x = ms->pt.x;
     int y = ms->pt.y;
+
+    // 抑制模式（全屏/独占应用前台，且不在白名单）：整个钩子放行，
+    // 所有鼠标事件原样透传给目标程序，相当于程序暂停运行。
+    if (g_suppress) {
+        if (wParam == WM_RBUTTONDOWN) {
+            // 清除可能残留的手势状态，避免恢复后误触发
+            g_r_down = false;
+            g_wheel_active = false;
+            g_down_time = 0;
+            g_ignore_down = false;
+            g_ignore_up = false;
+        }
+        return false;
+    }
 
     // _ignoreNext 标志：放行紧随其后的真实事件（备用机制）
     if (wParam == WM_RBUTTONDOWN && g_ignore_down) {
@@ -164,6 +179,10 @@ extern "C" __declspec(dllexport) void stop_hook() {
 extern "C" __declspec(dllexport) void set_drag_threshold(int px) {
     int v = px < 4 ? 4 : px;
     g_threshold2 = v * v;
+}
+
+extern "C" __declspec(dllexport) void set_suppress(int on) {
+    InterlockedExchange(&g_suppress, on ? 1 : 0);
 }
 
 extern "C" __declspec(dllexport) void set_ignore_next_click() {

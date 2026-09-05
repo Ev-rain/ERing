@@ -139,6 +139,10 @@ class ScreenTranslatorApp:
         self._health_timer = QTimer()
         self._health_timer.timeout.connect(self._check_hook_health)
         self._health_timer.start(3000)
+        self._fs_suppress_timer = QTimer()
+        self._fs_suppress_timer.timeout.connect(self._sync_fullscreen_suppress)
+        self._fs_suppress_timer.start(300)
+        self._fs_suppressing = False
 
     # ---------- 入口 ----------
     def run(self):
@@ -211,6 +215,30 @@ class ScreenTranslatorApp:
             return fullscreen_should_hide(self.cfg["fullscreen_whitelist"])
         except Exception:
             return False
+
+    def _sync_fullscreen_suppress(self):
+        """轮询前台：全屏/独占应用且不在白名单时，让钩子整体放行（暂停运行）。"""
+        try:
+            target = bool(
+                self.cfg["suppress_fullscreen"]
+                and fullscreen_should_hide(self.cfg["fullscreen_whitelist"])
+            )
+        except Exception:
+            target = False
+        if target != self._fs_suppressing:
+            self._fs_suppressing = target
+            try:
+                self.hook.set_suppress(target)
+            except Exception:
+                pass
+            if target:
+                try:  # 收起可能残留的浮窗，避免盖在游戏上
+                    self.wheel.hide()
+                    self.result.hide()
+                    self.toast.hide()
+                except Exception:
+                    pass
+            log(f"fullscreen suppress -> {target}")
 
     # ---------- 轮盘动作 ----------
     def on_action(self, index):

@@ -3,7 +3,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 where g++ >nul 2>nul
 if %errorlevel%==0 (
-  g++ -shared -O2 -static -static-libgcc -static-libwinpthread -o wheelhook.dll wheelhook.cpp -luser32
+  g++ -shared -O2 -static -static-libgcc -o wheelhook.dll wheelhook.cpp -luser32
   if %errorlevel%==0 (
     echo 编译成功：native\wheelhook.dll
   ) else (
