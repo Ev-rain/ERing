@@ -230,6 +230,7 @@ class SettingsDialog(QDialog):
         self._balance_worker.done.connect(self._on_balance_result)
 
     # ---------- 左侧导航 ----------
+    
     def _build_sidebar(self):
         side = QWidget()
         side.setObjectName("sidebar")
@@ -257,6 +258,7 @@ class SettingsDialog(QDialog):
         return side
 
     # ---------- 页面骨架 ----------
+    
     @staticmethod
     def _page(title, subtitle):
         page = QWidget()
@@ -318,6 +320,7 @@ class SettingsDialog(QDialog):
         layout.addLayout(row)
 
     # ---------- 翻译页 ----------
+    
     def _build_translate_page(self):
         page, v = self._page("翻译设置", "配置翻译方向、翻译源与 AI 接口。")
 
@@ -359,6 +362,7 @@ class SettingsDialog(QDialog):
         return page
 
     # ---------- 轮盘页 ----------
+    
     def _build_wheel_page(self):
         page, v = self._page("轮盘与识别", "轮盘手势触发距离与截图文字识别引擎。")
 
@@ -396,25 +400,6 @@ class SettingsDialog(QDialog):
         sub_row.addWidget(self.escape_dist_label)
         wv.addLayout(sub_row)
         v.addWidget(wheel_card)
-
-        fs_card, fsv = self._card("全屏 / 独占应用")
-        self.fullscreen_check = QCheckBox("全屏/独占应用在前台时隐藏（避免游戏等误触发）")
-        self.fullscreen_check.setChecked(bool(self.cfg["suppress_fullscreen"]))
-        self._form_row(fsv, "前台隐藏", self.fullscreen_check)
-        wl_text = ", ".join(str(x) for x in (self.cfg["fullscreen_whitelist"] or []))
-        self.fullscreen_edit = QLineEdit(wl_text)
-        self.fullscreen_edit.setPlaceholderText(
-            "例如：vlc.exe, mpv.exe（进程名，逗号分隔）"
-        )
-        self._form_row(fsv, "白名单", self.fullscreen_edit)
-        fs_hint = QLabel(
-            "白名单内的全屏应用仍可呼出轮盘。进程名可在任务管理器的"
-            "“详细信息”列查看，只填名字即可（如 chrome.exe、vlc.exe）。"
-        )
-        fs_hint.setWordWrap(True)
-        fs_hint.setStyleSheet("color:#94A3B8; font-size:12px;")
-        fsv.addWidget(fs_hint)
-        v.addWidget(fs_card)
 
         ocr_card, ov = self._card("文字识别（OCR）")
         self.ocr_engine = QComboBox()
@@ -564,6 +549,7 @@ class SettingsDialog(QDialog):
         self._refresh_rapid_ui()
 
     # ---------- 录屏页 ----------
+
     def _build_record_page(self):
         page, v = self._page("录屏设置", "帧率、鼠标指针与保存格式。")
 
@@ -629,7 +615,8 @@ class SettingsDialog(QDialog):
 
             log(f"open record dir failed: {exc}")
 
-    # ---------- DeepSeek 页 ----------
+    # ---------- API 页 ----------
+
     def _build_deepseek_page(self):
         page, v = self._page("DeepSeek 账户", "查询余额与今日消费（按余额差值统计，充值增长自动忽略）。")
 
@@ -665,7 +652,8 @@ class SettingsDialog(QDialog):
             self.update_usage(self._balance_provider.consumption())
         return page
 
-    # ---------- 日志页 ----------
+    # ---------- 通用设置页 ----------
+
     def _build_log_page(self):
         page, v = self._page("通用设置", "开机自启动与调试日志。")
 
@@ -688,6 +676,25 @@ class SettingsDialog(QDialog):
         self._form_row(gv, "翻译窗口", self.remember_size_check)
         v.addWidget(gen_card)
 
+        fs_card, fsv = self._card("全屏 / 独占应用")
+        self.fullscreen_check = QCheckBox("全屏/独占应用在前台时隐藏（避免游戏等误触发）")
+        self.fullscreen_check.setChecked(bool(self.cfg["suppress_fullscreen"]))
+        self._form_row(fsv, "前台隐藏", self.fullscreen_check)
+        wl_text = ", ".join(str(x) for x in (self.cfg["fullscreen_whitelist"] or []))
+        self.fullscreen_edit = QLineEdit(wl_text)
+        self.fullscreen_edit.setPlaceholderText(
+            "例如：vlc.exe, mpv.exe（进程名，逗号分隔）"
+        )
+        self._form_row(fsv, "白名单", self.fullscreen_edit)
+        fs_hint = QLabel(
+            "白名单内的全屏应用仍可呼出轮盘。进程名可在任务管理器的"
+            "“详细信息”列查看，只填名字即可（如 chrome.exe、vlc.exe）。"
+        )
+        fs_hint.setWordWrap(True)
+        fs_hint.setStyleSheet("color:#94A3B8; font-size:12px;")
+        fsv.addWidget(fs_hint)
+        v.addWidget(fs_card)
+        
         card, cv = self._card("调试日志")
         self.log_check = QCheckBox("启用调试日志（data\\app.log / mouse.log）")
         self.log_check.setChecked(bool(self.cfg["enable_logging"]))
