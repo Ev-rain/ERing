@@ -18,13 +18,21 @@ try:
 except Exception:
     pass
 
+# DPI 感知：优先设置与 Qt 默认一致的 PER_MONITOR_AWARE_V2，
+# 避免 Qt 创建 QApplication 时再次设置失败而打印 “拒绝访问” 告警。
 try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    if ctypes.windll.user32.SetProcessDpiAwarenessContext(-4):
+        pass  # 设置成功，Qt 不会再告警
+    else:
+        raise OSError("SetProcessDpiAwarenessContext 返回失败")
 except Exception:
     try:
-        ctypes.windll.user32.SetProcessDPIAware()
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
-        pass
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
 
 from app.application import main
 
