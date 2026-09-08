@@ -4,6 +4,8 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+# 打包时生成（tools/stamp_build_info.py）
+src/ERing/app/build_info.py
 
 # ---- 运行时数据（含 API Key / 日志 / 录屏 / 生成的图片）----
 data/
