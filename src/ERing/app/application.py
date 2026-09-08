@@ -92,7 +92,7 @@ class ScreenTranslatorApp:
         self._icon_filter = _WindowIconFilter(self.qt)
         self.qt.installEventFilter(self._icon_filter)
         self.cfg = Config()
-        configure_logging(self.cfg["enable_logging"])
+        configure_logging(True)  # 日志默认开启，不再由设置项关闭
         log("=== ERing 启动 ===")
         self.events = queue.Queue()
         self.balance = BalanceProvider(

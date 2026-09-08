@@ -10,12 +10,16 @@ set RAPID_COLLECT=
 ".venv\Scripts\python.exe" -c "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('rapidocr_onnxruntime') else 1)" >nul 2>&1
 if %errorlevel%==0 set RAPID_COLLECT=--collect-data rapidocr_onnxruntime
 
+rem Stamp version + date into a generated module (used by the settings update module).
+".venv\Scripts\python.exe" tools\stamp_build_info.py
+
 ".venv\Scripts\pyinstaller.exe" --noconfirm --clean --windowed --name ERing ^
   --icon src\ERing\app\assets\tray.ico ^
   --add-data "src\ERing\app\assets;assets" ^
   --add-data "src\ERing\native\wheelhook.dll;native" ^
   %RAPID_COLLECT% ^
   --collect-submodules uiautomation ^
+  --hidden-import app.build_info ^
   src\ERing\main.py
 
 rem PyInstaller may collect ICU DLLs from third-party apps on PATH and break QtCore.

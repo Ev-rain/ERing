@@ -3,7 +3,9 @@
 只保留本工具需要的功能：翻译 / 轮盘 / DeepSeek / 日志。"""
 import os
 import threading
+import webbrowser
 
+import requests
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -11,6 +13,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -18,6 +21,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QScrollArea,
     QSlider,
     QStackedWidget,
     QVBoxLayout,
@@ -28,9 +32,9 @@ from app.config import CONFIG_DIR
 from app.autostart import is_enabled as autostart_enabled
 from app.autostart import set_enabled as autostart_set_enabled
 from app.deepseek import fetch_balance
-from app.log_utils import configure as configure_logging
 from app.paths import project_root
 from app.tray import make_icon
+from app.version import current as current_version
 
 PROVIDERS = [
     ("自动（MyMemory → Google → Edge → OpenAI）", "auto"),
@@ -190,6 +194,13 @@ class _InstallWorker(QObject):
         threading.Thread(target=lambda: self.done.emit(fn()), daemon=True).start()
 
 
+class _UpdateWorker(QObject):
+    done = Signal(object)
+
+    def start(self, fn):
+        threading.Thread(target=lambda: self.done.emit(fn()), daemon=True).start()
+
+
 class SettingsDialog(QDialog):
     def __init__(self, cfg, parent=None, balance_provider=None):
         super().__init__(parent)
@@ -218,7 +229,7 @@ class SettingsDialog(QDialog):
             self._build_log_page(),
         ]
         for page in self.pages:
-            self.stack.addWidget(page)
+            self.stack.addWidget(self._wrap_scroll(page))
         right.addWidget(self.stack, 1)
         right.addLayout(self._build_buttons())
         root.addLayout(right, 1)
@@ -228,6 +239,8 @@ class SettingsDialog(QDialog):
 
         self._balance_worker = _BalanceWorker()
         self._balance_worker.done.connect(self._on_balance_result)
+        self._update_worker = _UpdateWorker()
+        self._update_worker.done.connect(self._on_update_result)
 
     # ---------- 左侧导航 ----------
     
@@ -252,7 +265,7 @@ class SettingsDialog(QDialog):
             item = QListWidgetItem(text)
             self.nav.addItem(item)
         v.addWidget(self.nav, 1)
-        ver = QLabel("v1.0 · 参考 StarPie 交互")
+        ver = QLabel(current_version()[0])  # 左下角信息框：暂显示版本号，后期可在此输出小字
         ver.setStyleSheet("color:#94A3B8; font-size:11px;")
         v.addWidget(ver)
         return side
@@ -655,7 +668,7 @@ class SettingsDialog(QDialog):
     # ---------- 通用设置页 ----------
 
     def _build_log_page(self):
-        page, v = self._page("通用设置", "开机自启动与调试日志。")
+        page, v = self._page("通用设置", "开机自启动、全屏隐藏与版本更新。")
 
         gen_card, gv = self._card("通用")
         self.autostart_check = QCheckBox("开机自启动（登录 Windows 后自动运行）")
@@ -695,20 +708,23 @@ class SettingsDialog(QDialog):
         fsv.addWidget(fs_hint)
         v.addWidget(fs_card)
         
-        card, cv = self._card("调试日志")
-        self.log_check = QCheckBox("启用调试日志（data\\app.log / mouse.log）")
-        self.log_check.setChecked(bool(self.cfg["enable_logging"]))
-        cv.addWidget(self.log_check)
-        open_btn = QPushButton("打开日志文件夹")
-        open_btn.clicked.connect(lambda: os.startfile(str(CONFIG_DIR)))
-        cv.addWidget(open_btn)
-        log_hint = QLabel(
-            "日志自动保留最近 5 份（含当前，app.log / mouse.log 各自轮转），超出自动清理。"
-        )
-        log_hint.setWordWrap(True)
-        log_hint.setStyleSheet("color:#94A3B8; font-size:12px;")
-        cv.addWidget(log_hint)
-        v.addWidget(card)
+        up_card, up_v = self._card("版本更新")
+        e_ver, e_date = current_version()
+        up_label = QLabel(f"当前版本 {e_ver} · 发布于 {e_date}")
+        up_label.setStyleSheet("color:#94A3B8; font-size:12px;")
+        up_v.addWidget(up_label)
+        upd_row = QHBoxLayout()
+        upd_row.setSpacing(10)
+        self.update_btn = QPushButton("检查更新")
+        self.update_btn.clicked.connect(self._check_update)
+        self.update_status = QLabel("")
+        self.update_status.setWordWrap(True)
+        self.update_status.setStyleSheet("color:#94A3B8; font-size:12px;")
+        upd_row.addWidget(self.update_btn)
+        upd_row.addWidget(self.update_status, 1)
+        up_v.addLayout(upd_row)
+        v.addWidget(up_card)
+
         v.addStretch(1)
         return page
 
@@ -725,6 +741,19 @@ class SettingsDialog(QDialog):
         row.addWidget(cancel)
         row.addWidget(save)
         return row
+
+    @staticmethod
+    def _wrap_scroll(page):
+        """把设置页包进 QScrollArea，内容超出可视区时滚动，避免卡片被裁剪。"""
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        sc.setFrameShape(QFrame.Shape.NoFrame)
+        sc.setStyleSheet(
+            "QScrollArea{border:none;background:transparent;}"
+            "QScrollArea>QWidget>QWidget{background:transparent;}"
+        )
+        sc.setWidget(page)
+        return sc
 
     # ---------- 余额查询 ----------
     def _query_balance(self):
@@ -755,6 +784,51 @@ class SettingsDialog(QDialog):
                 f"今日已消耗：¥{consumption:.2f}（已忽略充值增长）"
             )
 
+    # ---------- 检查更新 ----------
+    def _check_update(self):
+        self.update_btn.setEnabled(False)
+        self.update_status.setText("正在检查更新…")
+        self._update_worker.start(self._fetch_latest_release)
+
+    def _fetch_latest_release(self):
+        url = "https://api.github.com/repos/Ev-rain/ERing/releases/latest"
+        try:
+            resp = requests.get(url, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            tag = str(data.get("tag_name", "")).strip()
+            published = str(data.get("published_at", "")).strip()
+            html = str(data.get("html_url", "")).strip()
+            return ("ok", tag, published, html)
+        except Exception as e:
+            return ("error", str(e))
+
+    def _on_update_result(self, result):
+        try:
+            if result[0] == "error":
+                self.update_status.setText(f"检查失败：{result[1]}")
+                return
+            _, tag, published, html = result
+            if not tag:
+                self.update_status.setText("未获取到最新版本")
+                return
+            pub = (published or "")[:10] or "—"
+            cur = current_version()[0].lstrip("v").lower()
+            latest = tag.lstrip("v").lower()
+            if cur == latest:
+                self.update_status.setText(f"已是最新版本 {tag}（发布于 {pub}）")
+                return
+            self.update_status.setText(f"发现新版本 {tag}（发布于 {pub}），已打开下载页面")
+            if html:
+                try:
+                    webbrowser.open(html)
+                except Exception:
+                    pass
+        except Exception:
+            self.update_status.setText("检查更新发生异常")
+        finally:
+            self.update_btn.setEnabled(True)
+
     # ---------- 保存 ----------
     def _save(self):
         self.cfg["target_lang"] = self.lang.currentText()
@@ -782,8 +856,6 @@ class SettingsDialog(QDialog):
             "api_key": self.key.text().strip(),
         }
         self.cfg["deepseek"] = {"api_key": self.ds_key.text().strip()}
-        self.cfg["enable_logging"] = self.log_check.isChecked()
-        configure_logging(self.cfg["enable_logging"])
         self.cfg["close_to_tray"] = self.close_behavior.currentData() == "tray"
         self.cfg["remember_result_size"] = self.remember_size_check.isChecked()
         try:
