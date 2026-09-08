@@ -3,6 +3,7 @@
 只保留本工具需要的功能：翻译 / 轮盘 / DeepSeek / 日志。"""
 import os
 import threading
+import warnings
 import webbrowser
 
 import requests
@@ -805,8 +806,8 @@ class SettingsDialog(QDialog):
     def _fetch_latest_release(self):
         """查询 GitHub 最新 release 的版本号，返回 (ok, tag, date, url)。"""
         try:
-            resp = requests.get(
-                "https://api.github.com/repos/Ev-rain/ERing/releases/latest", timeout=15
+            resp = self._github_get(
+                "https://api.github.com/repos/Ev-rain/ERing/releases/latest"
             )
             resp.raise_for_status()
             data = resp.json()
@@ -816,6 +817,17 @@ class SettingsDialog(QDialog):
             return ("ok", tag, published, html)
         except Exception as e:
             return ("error", str(e))
+
+    @staticmethod
+    def _github_get(url):
+        """读取 GitHub 公共版本信息；部分环境证书链不全（代理/杀软）时退回不校验。
+        仅用于版本检查，不含敏感数据。"""
+        try:
+            return requests.get(url, timeout=15)
+        except requests.exceptions.SSLError:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                return requests.get(url, timeout=15, verify=False)
 
     def _on_update_result(self, result):
         try:
