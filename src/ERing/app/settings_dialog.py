@@ -201,6 +201,18 @@ class _UpdateWorker(QObject):
         threading.Thread(target=lambda: self.done.emit(fn()), daemon=True).start()
 
 
+def _ver_key(s):
+    """把 v1.2.3 之类版本号转成可比较的整数元组，非法返回 None。"""
+    parts = str(s).strip().lstrip("v").split(".")
+    nums = []
+    for p in parts:
+        if p.isdigit():
+            nums.append(int(p))
+        else:
+            return None
+    return tuple(nums)
+
+
 class SettingsDialog(QDialog):
     def __init__(self, cfg, parent=None, balance_provider=None):
         super().__init__(parent)
@@ -791,9 +803,11 @@ class SettingsDialog(QDialog):
         self._update_worker.start(self._fetch_latest_release)
 
     def _fetch_latest_release(self):
-        url = "https://api.github.com/repos/Ev-rain/ERing/releases/latest"
+        """查询 GitHub 最新 release 的版本号，返回 (ok, tag, date, url)。"""
         try:
-            resp = requests.get(url, timeout=15)
+            resp = requests.get(
+                "https://api.github.com/repos/Ev-rain/ERing/releases/latest", timeout=15
+            )
             resp.raise_for_status()
             data = resp.json()
             tag = str(data.get("tag_name", "")).strip()
@@ -813,17 +827,26 @@ class SettingsDialog(QDialog):
                 self.update_status.setText("未获取到最新版本")
                 return
             pub = (published or "")[:10] or "—"
-            cur = current_version()[0].lstrip("v").lower()
-            latest = tag.lstrip("v").lower()
-            if cur == latest:
-                self.update_status.setText(f"已是最新版本 {tag}（发布于 {pub}）")
+            latest_key = _ver_key(tag)
+            if latest_key is None:
+                self.update_status.setText("无法解析最新版本号")
                 return
-            self.update_status.setText(f"发现新版本 {tag}（发布于 {pub}），已打开下载页面")
-            if html:
-                try:
-                    webbrowser.open(html)
-                except Exception:
-                    pass
+            cur_key = _ver_key(current_version()[0])
+            if cur_key is not None and latest_key > cur_key:
+                # 只有确实更新的发布版才提示并打开下载页
+                self.update_status.setText(f"发现新版本 {tag}（发布于 {pub}），已打开下载页面")
+                if html:
+                    try:
+                        webbrowser.open(html)
+                    except Exception:
+                        pass
+                return
+            if cur_key is not None and latest_key < cur_key:
+                # 当前版本比 GitHub 最新发布还新（可能该版本尚未发布）
+                self.update_status.setText(f"当前版本已是最新（GitHub 最新发布 {tag}）")
+                return
+            # latest_key == cur_key：恰好一致
+            self.update_status.setText(f"已是最新版本 {tag}（发布于 {pub}）")
         except Exception:
             self.update_status.setText("检查更新发生异常")
         finally:
