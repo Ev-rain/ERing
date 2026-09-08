@@ -29,6 +29,7 @@ ReleaseCb = ctypes.WINFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
 NormalUpCb = ctypes.WINFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
 LeftClickCb = ctypes.WINFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
 MoveCb = ctypes.WINFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
+IsolatedCb = ctypes.WINFUNCTYPE(ctypes.c_int)
 
 
 class NativeHook:
@@ -43,6 +44,8 @@ class NativeHook:
         self._cbs = []  # 保持回调引用，防止被 GC
         self._threshold = 14
         self.suppress = False
+        self._isolated_check = None
+        self._iso_cb = None
 
     @classmethod
     def available(cls):
@@ -61,6 +64,7 @@ class NativeHook:
             self._dll.stop_hook.argtypes = []
             self._dll.set_drag_threshold.argtypes = [ctypes.c_int]
             self._dll.set_suppress.argtypes = [ctypes.c_int]
+            self._dll.set_isolated.argtypes = [IsolatedCb]
             self._dll.set_ignore_next_click.argtypes = []
             self._dll.get_event_count.argtypes = []
             self._dll.get_event_count.restype = ctypes.c_long
@@ -89,6 +93,10 @@ class NativeHook:
             except Exception:
                 pass
 
+    def set_isolated_check(self, fn):
+        """设置前台是否处于「独占/全屏且不在白名单」的判定回调（返回真则钩子放行真实点击）。"""
+        self._isolated_check = fn
+
     def event_count(self):
         if self._dll:
             try:
@@ -106,7 +114,10 @@ class NativeHook:
             LeftClickCb(self._on_left),
             MoveCb(self._on_move),
         ]
+        self._iso_cb = IsolatedCb(self._on_isolated)
+        self._cbs.append(self._iso_cb)
         dll.set_drag_threshold(self._threshold)
+        dll.set_isolated(self._iso_cb)
         self.set_suppress(self.suppress)
         ok = dll.start_hook(*self._cbs)
         log(f"native hook start: {bool(ok)}")
@@ -118,6 +129,7 @@ class NativeHook:
             except Exception:
                 pass
         self._cbs = []
+        self._iso_cb = None
 
     def _on_trigger(self, x, y, ox, oy):
         if self.on_wheel_trigger:
@@ -153,3 +165,11 @@ class NativeHook:
                 self.on_mouse_move(x, y)
             except Exception:
                 pass
+
+    def _on_isolated(self):
+        try:
+            if self._isolated_check and self._isolated_check():
+                return 1
+        except Exception:
+            pass
+        return 0

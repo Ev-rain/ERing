@@ -74,12 +74,17 @@ class MouseHook:
         self._ignore_up = False
         self._event_count = 0
         self.suppress = False
+        self._isolated_check = None
 
     def set_drag_threshold(self, px):
         self._threshold2 = max(4, int(px)) ** 2
 
     def set_suppress(self, value):
         self.suppress = bool(value)
+
+    def set_isolated_check(self, fn):
+        """设置前台是否处于「独占/全屏且不在白名单」的判定回调（返回真则放行真实点击）。"""
+        self._isolated_check = fn
 
     def set_ignore_next_click(self):
         self._ignore_down = True
@@ -165,6 +170,13 @@ class MouseHook:
                     except Exception:
                         pass
             elif wParam == WM_RBUTTONDOWN:
+                # [isolate] 前台为独占/全屏且不在白名单时，原样放行这次真实点击，
+                # 不吞、不注入 mouse_event、不弹轮盘（对齐 StarPie CheckIsIsolated）。
+                if self._isolated_check and self._isolated_check():
+                    self._r_down = False
+                    self._down_pos = None
+                    self._down_time = 0.0
+                    return user32.CallNextHookEx(self._hook, nCode, wParam, lParam)
                 # 立即吞掉按下：目标程序永远收不到
                 self._r_down = True
                 self._down_pos = (x, y)

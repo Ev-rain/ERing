@@ -13,6 +13,7 @@ typedef void(__stdcall *ReleaseCb)(int x, int y);
 typedef void(__stdcall *NormalUpCb)(int x, int y);
 typedef void(__stdcall *LeftClickCb)(int x, int y);
 typedef void(__stdcall *MoveCb)(int x, int y);
+typedef int(__stdcall *IsolatedCb)(void);
 
 static TriggerCb g_trigger = nullptr;
 static ReleaseCb g_release = nullptr;
@@ -32,6 +33,7 @@ static volatile bool g_ignore_down = false;
 static volatile bool g_ignore_up = false;
 static volatile LONG g_event_count = 0;
 static volatile LONG g_suppress = 0;
+static IsolatedCb g_isolated = nullptr;
 
 #define LLMHF_INJECTED 0x00000001
 #define WATCHDOG_MS 10000
@@ -83,6 +85,15 @@ static bool handle_event(int nCode, WPARAM wParam, LPARAM lParam) {
             if (g_left) g_left(x, y);
             return false;
         case WM_RBUTTONDOWN:
+            // [isolate] 前台为独占/全屏且不在白名单时，原样放行这次真实点击：
+            // 不吞、不注入 mouse_event、不弹轮盘。与 StarPie CheckIsIsolated()->
+            // e.Handled=false 一致，避免游戏里用户态注入点击被反作弊当作自动化误判。
+            if (g_isolated && g_isolated()) {
+                g_r_down = false;
+                g_wheel_active = false;
+                g_down_time = 0;
+                return false;
+            }
             // 立即吞掉按下：目标程序永远收不到，避免卡死/菜单
             g_r_down = true;
             g_down = ms->pt;
@@ -183,6 +194,10 @@ extern "C" __declspec(dllexport) void set_drag_threshold(int px) {
 
 extern "C" __declspec(dllexport) void set_suppress(int on) {
     InterlockedExchange(&g_suppress, on ? 1 : 0);
+}
+
+extern "C" __declspec(dllexport) void set_isolated(IsolatedCb cb) {
+    g_isolated = cb;
 }
 
 extern "C" __declspec(dllexport) void set_ignore_next_click() {

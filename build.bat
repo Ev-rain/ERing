@@ -1,10 +1,15 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
-".venv\Scripts\python.exe" -m pip install pyinstaller
+
+rem Make sure pyinstaller is available in the project venv.
+".venv\Scripts\python.exe" -m pip install pyinstaller >nul 2>&1
+
+rem Collect rapidocr data only if rapidocr_onnxruntime is installed.
 set RAPID_COLLECT=
 ".venv\Scripts\python.exe" -c "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('rapidocr_onnxruntime') else 1)" >nul 2>&1
 if %errorlevel%==0 set RAPID_COLLECT=--collect-data rapidocr_onnxruntime
+
 ".venv\Scripts\pyinstaller.exe" --noconfirm --clean --windowed --name ERing ^
   --icon src\ERing\app\assets\tray.ico ^
   --add-data "src\ERing\app\assets;assets" ^
@@ -12,9 +17,12 @@ if %errorlevel%==0 set RAPID_COLLECT=--collect-data rapidocr_onnxruntime
   %RAPID_COLLECT% ^
   --collect-submodules uiautomation ^
   src\ERing\main.py
-rem PySide6-Essentials 不自带 ICU，PATH 里的第三方 ICU 会被误收集导致 QtCore 加载失败
+
+rem PyInstaller may collect ICU DLLs from third-party apps on PATH and break QtCore.
 for %%f in (dist\ERing\_internal\icu*.dll) do if exist "%%f" del "%%f"
+
 echo.
-echo 打包完成：dist\ERing\ 下的 ERing.exe 可直接运行
-echo 提示：录屏需要把 ffmpeg.exe 放到 exe 同级的 native\ffmpeg\ 下（或加入 PATH）
+echo Build complete: dist\ERing\ERing.exe
+echo NOTE: recording needs ffmpeg.exe in native\ffmpeg\ next to the exe (or on PATH).
+endlocal
 pause

@@ -115,6 +115,9 @@ class ScreenTranslatorApp:
             on_normal_up=lambda x, y: self.events.put(("normal_up", x, y)),
         )
         self._apply_drag_threshold()
+        # 前台为独占/全屏且不在白名单（如全屏游戏）时，钩子于右键按下瞬间放行真实点击，
+        # 不吞、不注入、不弹轮盘 —— 对齐 StarPie CheckIsIsolated，避免反作弊误判。
+        self.hook.set_isolated_check(self._fullscreen_suppressed)
 
         self.wheel = WheelOverlay()
         self.wheel.action_chosen.connect(self.on_action)

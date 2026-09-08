@@ -10,5 +10,4 @@ if %errorlevel%==0 (
 ".venv\Scripts\python.exe" -m pip install --upgrade pip
 ".venv\Scripts\python.exe" -m pip install -r src\ERing\requirements.txt
 echo.
-echo 依赖安装完成！双击 启动.bat 运行。
 pause
