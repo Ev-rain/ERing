@@ -29,7 +29,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.config import CONFIG_DIR
+from app.config import (
+    CONFIG_DIR,
+    DEEPSEEK_BASE,
+    DEEPSEEK_MODEL,
+    RETIRED_DEEPSEEK_MODELS,
+)
 from app.autostart import is_enabled as autostart_enabled
 from app.autostart import set_enabled as autostart_set_enabled
 from app.deepseek import fetch_balance
@@ -376,7 +381,7 @@ class SettingsDialog(QDialog):
         self.base = QLineEdit(self.cfg["openai"]["base_url"])
         self.base.setPlaceholderText("https://api.deepseek.com 或 https://api.openai.com/v1")
         self.model = QLineEdit(self.cfg["openai"]["model"])
-        self.model.setPlaceholderText("deepseek-chat / gpt-4o-mini")
+        self.model.setPlaceholderText(f"{DEEPSEEK_MODEL} / gpt-4o-mini")
         self.key = QLineEdit(self.cfg["openai"]["api_key"])
         self.key.setPlaceholderText("sk-...（留空则用下方 DeepSeek Key）")
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
@@ -901,8 +906,11 @@ class SettingsDialog(QDialog):
         if self.cfg["provider"] == "openai":
             oa = self.cfg["openai"]
             if not oa.get("base_url") and self.cfg["deepseek"]["api_key"]:
-                oa["base_url"] = "https://api.deepseek.com"
-                oa["model"] = oa.get("model") or "deepseek-chat"
+                oa["base_url"] = DEEPSEEK_BASE
+                # 旧模型名已停服（deepseek-chat / deepseek-reasoner），统一落到现行 deepseek-flash
+                current = (oa.get("model") or "").strip()
+                if not current or current in RETIRED_DEEPSEEK_MODELS:
+                    oa["model"] = DEEPSEEK_MODEL
                 oa["api_key"] = self.cfg["deepseek"]["api_key"]
                 self.cfg["openai"] = oa
 

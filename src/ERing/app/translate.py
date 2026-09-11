@@ -5,6 +5,8 @@ import threading
 
 import requests
 
+from app.config import DEEPSEEK_BASE, DEEPSEEK_MODEL, RETIRED_DEEPSEEK_MODELS
+
 _session = requests.Session()  # 复用连接，减少 TLS/握手开销
 _cache = {}
 _cache_lock = threading.Lock()
@@ -174,14 +176,19 @@ def _edge(text, to):
 def _openai(text, to, conf, deepseek_key=""):
     base = (conf.get("base_url") or "").rstrip("/")
     key = conf.get("api_key") or ""
-    model = conf.get("model") or ""
+    model = (conf.get("model") or "").strip()
+    # 是否走 DeepSeek 官方接口：显式填了官方地址，或留空地址但配了 DeepSeek Key
+    using_deepseek = "api.deepseek.com" in base or (not base and bool(deepseek_key))
     if not base and deepseek_key:
-        base = "https://api.deepseek.com"
+        base = DEEPSEEK_BASE
         key = deepseek_key
-        model = model or "deepseek-chat"
     if not base:
         base = "https://api.openai.com/v1"
-    if not model:
+    if using_deepseek:
+        # 旧模型名已停服（deepseek-chat / deepseek-reasoner，2026-07-24 下线），一律换成现行 deepseek-flash
+        if not model or model in RETIRED_DEEPSEEK_MODELS:
+            model = DEEPSEEK_MODEL
+    elif not model:
         model = "gpt-4o-mini"
     lang = LANG_NAMES.get(to, to)
     headers = {"Content-Type": "application/json", **UA}

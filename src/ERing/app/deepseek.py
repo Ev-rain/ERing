@@ -6,41 +6,100 @@ import time
 
 import requests
 
-from app.config import CONFIG_DIR
+from app.config import CONFIG_DIR, DEEPSEEK_BASE
 from app.log_utils import log
 
-BASE = "https://api.deepseek.com"
+BASE = DEEPSEEK_BASE
+# 官方文档的余额接口是 GET /user/balance；/v1/user/balance 作为兜底（部分环境下
+# 网关会把 OpenAI 兼容前缀也映射一份），仅在首个路径返回 404 时尝试。
+BALANCE_PATHS = ("/user/balance", "/v1/user/balance")
+
 UA = {"Accept": "application/json", "User-Agent": "wheel-translator"}
+
+
+def _http_error_text(resp):
+    """把 HTTP 错误翻译成能直接照做的提示，并带上服务端返回的原因。"""
+    status = resp.status_code
+    hint = {
+        401: "（API Key 无效或已删除，请到 platform.deepseek.com 重新生成）",
+        402: "（账户余额不足）",
+        403: "（该 Key 无权查询余额）",
+        429: "（请求过于频繁，请稍后再试）",
+    }.get(status, "")
+    if not hint and status >= 500:
+        hint = "（DeepSeek 服务端异常，请稍后再试）"
+    detail = ""
+    try:
+        body = resp.json()
+        detail = (body.get("error") or {}).get("message") or body.get("message") or ""
+    except Exception:  # noqa: BLE001
+        detail = (resp.text or "").strip()[:160]
+    text = f"查询失败：HTTP {status}{hint}"
+    if detail:
+        text += f"｜{detail}"
+    return text
 
 
 def _fetch_data(api_key):
     if not api_key or not api_key.strip():
         return False, None, "请先填写 DeepSeek API Key"
-    try:
-        r = requests.get(
-            f"{BASE}/user/balance",
-            headers={"Authorization": f"Bearer {api_key.strip()}", **UA},
-            timeout=15,
-        )
-        r.raise_for_status()
-        return True, r.json(), ""
-    except Exception as exc:  # noqa: BLE001
-        return False, None, f"查询失败：{exc}"
+    key = api_key.strip()
+    last_err = "查询失败：未获得有效响应"
+    for path in BALANCE_PATHS:
+        url = f"{BASE}{path}"
+        try:
+            r = requests.get(
+                url,
+                headers={"Authorization": f"Bearer {key}", **UA},
+                timeout=15,
+            )
+        except requests.exceptions.SSLError:
+            # 余额查询带 API Key，不做「跳过证书校验」的降级；只把原因说清楚
+            return False, None, (
+                "证书校验失败：HTTPS 被本机代理/安全软件重新签发，而其根证书不在信任库中。"
+                "程序会自动合并 Windows 证书库；若仍失败，请把该软件的根证书导入"
+                "「受信任的根证书颁发机构」，或让 api.deepseek.com 直连。"
+            )
+        except Exception as exc:  # noqa: BLE001
+            last_err = f"网络错误：{exc}"
+            continue
+        if r.status_code == 404:
+            last_err = f"接口不存在（404）：{url}"
+            continue
+        try:
+            r.raise_for_status()
+        except Exception:  # noqa: BLE001
+            return False, None, _http_error_text(r)
+        try:
+            return True, r.json(), ""
+        except ValueError:
+            return False, None, f"返回内容无法解析（HTTP {r.status_code}）"
+    return False, None, last_err
+
+
+def pick_balance_info(infos, prefer="CNY"):
+    """余额接口可能同时返回 CNY 与 USD，优先取人民币，避免圆心显示成美元。"""
+    items = [i for i in (infos or []) if isinstance(i, dict)]
+    if not items:
+        return None
+    for info in items:
+        if str(info.get("currency") or "").upper() == prefer:
+            return info
+    return items[0]
 
 
 def format_balance_short(data):
     """返回圆心用的简短余额，如 ¥7.5。"""
-    infos = data.get("balance_infos") or []
-    if not infos:
+    info = pick_balance_info(data.get("balance_infos"))
+    if not info:
         return None
-    info = infos[0]
     try:
         num = float(info.get("total_balance") or 0)
     except (TypeError, ValueError):
         return None
     text = f"{num:.2f}".rstrip("0").rstrip(".")
     currency = info.get("currency") or ""
-    sym = "¥" if currency == "CNY" else (currency or "")
+    sym = "¥" if currency == "CNY" else ("$" if currency == "USD" else currency)
     return f"{sym}{text}"
 
 
@@ -156,10 +215,10 @@ class BalanceProvider:
         short = format_balance_short(data) if ok else None
         num = None
         if ok and data:
-            infos = data.get("balance_infos") or []
-            if infos:
+            info = pick_balance_info(data.get("balance_infos"))
+            if info:
                 try:
-                    num = float(infos[0].get("total_balance") or 0)
+                    num = float(info.get("total_balance") or 0)
                 except (TypeError, ValueError):
                     num = None
         consumed = None

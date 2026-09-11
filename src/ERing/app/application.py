@@ -523,6 +523,13 @@ def _single_instance():
 def main():
     if not _single_instance():
         return 0
+    # 幂等：确保 HTTPS 信任库已包含 Windows 系统证书（代理/安全软件环境必需）
+    try:
+        from app.tls import install as install_tls
+
+        install_tls()
+    except Exception:
+        pass
     try:
         app = ScreenTranslatorApp(sys.argv)
         ret = app.run()

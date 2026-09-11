@@ -34,6 +34,12 @@ except Exception:
         except Exception:
             pass
 
+from app.tls import install as install_tls
+
+# 代理/安全软件环境里 certifi 缺少其根证书，会让 HTTPS 校验失败，
+# 先把 Windows 系统证书库并进来（必须在任何网络请求之前）。
+install_tls()
+
 from app.application import main
 
 if __name__ == "__main__":

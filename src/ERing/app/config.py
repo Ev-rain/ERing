@@ -9,6 +9,15 @@ APP_NAME = "ERing"
 # 所有配置、调试日志都放在工程目录下的 data 文件夹里
 CONFIG_DIR = project_root() / "data"
 
+# ---- DeepSeek 接口常量 ----
+# 官方 Change Log：deepseek-chat / deepseek-reasoner 已于 2026-07-24 停止服务；
+# 2026-09-10 发布 V4.1-Flash 后，现行模型名统一为 deepseek-flash
+# （V4-Flash / V4-Pro 系列已退役并路由到 V4.1-Flash）。
+# BASE URL 未变，仍是 https://api.deepseek.com。
+DEEPSEEK_BASE = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-flash"
+RETIRED_DEEPSEEK_MODELS = ("deepseek-chat", "deepseek-reasoner")
+
 DEFAULTS = {
     "drag_threshold": 14,        # 右键拖动多少像素触发轮盘
     "wheel_items": ["翻译", "录屏", "设置"],   # 外圈功能；圆心固定为「退出」
@@ -38,6 +47,30 @@ DEFAULTS = {
 }
 
 
+def migrate(loaded):
+    """把磁盘上的旧配置合并进默认值，并做历史字段迁移（纯函数，便于自检）。"""
+    merged = dict(DEFAULTS)
+    merged.update(loaded or {})
+    merged["openai"] = {**DEFAULTS["openai"], **(merged.get("openai") or {})}
+    merged["deepseek"] = {**DEFAULTS["deepseek"], **(merged.get("deepseek") or {})}
+    # 迁移：DeepSeek 旧模型名（deepseek-chat / deepseek-reasoner）已停服，
+    # 换成现行 deepseek-flash；仅当指向 DeepSeek 官方接口或未填地址时才改写，
+    # 避免动到用户自建/第三方 OpenAI 兼容接口上的同名模型。
+    oa = merged["openai"]
+    oa_base = str(oa.get("base_url") or "").strip()
+    if (not oa_base or "api.deepseek.com" in oa_base) and (
+        str(oa.get("model") or "").strip() in RETIRED_DEEPSEEK_MODELS
+    ):
+        oa["model"] = DEEPSEEK_MODEL
+    # 迁移：旧版「退出」在外圈 -> 移除；「截图」->「录屏」
+    items = merged.get("wheel_items")
+    if isinstance(items, list):
+        merged["wheel_items"] = [
+            ("录屏" if i == "截图" else i) for i in items if i != "退出"
+        ] or DEFAULTS["wheel_items"]
+    return merged
+
+
 class Config:
     def __init__(self):
         self.path = CONFIG_DIR / "settings.json"
@@ -48,17 +81,7 @@ class Config:
         try:
             if self.path.exists():
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
-                merged = dict(DEFAULTS)
-                merged.update(loaded or {})
-                merged["openai"] = {**DEFAULTS["openai"], **(merged.get("openai") or {})}
-                merged["deepseek"] = {**DEFAULTS["deepseek"], **(merged.get("deepseek") or {})}
-                # 迁移：旧版「退出」在外圈 -> 移除；「截图」->「录屏」
-                items = merged.get("wheel_items")
-                if isinstance(items, list):
-                    merged["wheel_items"] = [
-                        ("录屏" if i == "截图" else i) for i in items if i != "退出"
-                    ] or DEFAULTS["wheel_items"]
-                self.data = merged
+                self.data = migrate(loaded)
         except Exception:
             pass
 
