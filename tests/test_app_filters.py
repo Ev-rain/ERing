@@ -71,6 +71,21 @@ def test_chinese_and_space_in_path():
     assert should_suppress(c, path=p, fullscreen=False) is True
 
 
+def test_config_always_gives_lists():
+    import app.config as config
+
+    c = config.migrate({})
+    assert c["fullscreen_blacklist"] == []
+    assert c["fullscreen_whitelist"] == []
+
+    c = config.migrate({"fullscreen_blacklist": None, "fullscreen_whitelist": "C:\\a.exe"})
+    assert c["fullscreen_blacklist"] == []
+    assert c["fullscreen_whitelist"] == []      # 非列表一律丢弃，避免字符串被逐字符遍历
+
+    c = config.migrate({"fullscreen_blacklist": ["  C:\\a.exe  ", ""]})
+    assert c["fullscreen_blacklist"] == [r"C:\a.exe"]   # 剥空白、丢空串
+
+
 if __name__ == "__main__":
     test_blacklist_suppresses_regardless_of_fullscreen()
     test_blacklist_ignores_master_switch()
@@ -81,4 +96,5 @@ if __name__ == "__main__":
     test_legacy_basename_entry_still_matches()
     test_unknown_foreground_is_conservative_only_when_fullscreen()
     test_chinese_and_space_in_path()
+    test_config_always_gives_lists()
     print("ALL TESTS PASSED")

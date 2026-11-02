@@ -32,7 +32,8 @@ DEFAULTS = {
     "result_theme": "light",     # dark=暗色 | light=亮色（翻译结果面板主题）
     "wheel_anim_speed": "normal",# fast=快 | normal=标准 | slow=慢（弹出动画）
     "suppress_fullscreen": True, # 全屏/独占应用在前台时隐藏（避免游戏误用）
-    "fullscreen_whitelist": [],  # 白名单：这些全屏应用仍可调用（进程名列表）
+    "fullscreen_whitelist": [],  # 白名单：这些应用全屏时仍可呼出（绝对路径；不含分隔符时按 exe 名兼容）
+    "fullscreen_blacklist": [],  # 黑名单：这些应用不论是否全屏都不弹轮盘（绝对路径；同上兼容）
     "enable_outer_escape": True, # 外甩取消
     "outer_escape_distance": 160,# 外甩取消距离（px，140~320）
     "record_fps": 30,          # 录屏帧率
@@ -68,6 +69,14 @@ def migrate(loaded):
         merged["wheel_items"] = [
             ("录屏" if i == "截图" else i) for i in items if i != "退出"
         ] or DEFAULTS["wheel_items"]
+    # 迁移：白名单/黑名单统一成「非空字符串列表」，
+    # 防止手改配置写成字符串后被逐字符遍历，也顺手剥掉空白与空串
+    for key in ("fullscreen_whitelist", "fullscreen_blacklist"):
+        value = merged.get(key)
+        if not isinstance(value, list):
+            merged[key] = []
+        else:
+            merged[key] = [str(x).strip() for x in value if str(x).strip()]
     return merged
 
 
