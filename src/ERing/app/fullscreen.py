@@ -184,10 +184,3 @@ def should_suppress(cfg, path=None, name=None, fullscreen=None):
     except Exception as exc:
         _log_once(exc)
         return False
-
-
-def fullscreen_should_hide(whitelist=None):
-    """兼容旧调用点：全屏应用在前台且不在白名单时返回 True。"""
-    return should_suppress(
-        {"suppress_fullscreen": True, "fullscreen_whitelist": list(whitelist or [])}
-    )

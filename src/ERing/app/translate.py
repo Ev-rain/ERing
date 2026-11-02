@@ -110,13 +110,6 @@ def _cache_put(key, translated, provider_used):
         if len(_cache) >= CACHE_MAX:
             _cache.clear()
         _cache[key] = (translated, provider_used)
-
-
-def clear_cache():
-    with _cache_lock:
-        _cache.clear()
-
-
 def _mymemory(text, to):
     pair = f"Autodetect|{to}"
     results = []

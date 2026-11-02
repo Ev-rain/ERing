@@ -26,7 +26,7 @@ DEFAULTS = {
     "provider": "auto",          # auto | edge | google | openai
     "openai": {"base_url": "", "model": "", "api_key": ""},
     "deepseek": {"api_key": ""},
-    "enable_logging": True,      # 调试日志开关
+    "enable_logging": True,      # 已废弃：日志固定开启（保留键只为兼容旧配置）
     "ocr_engine": "native",      # native=Windows 原生(快) | rapid=RapidOCR(高精度)
     "wheel_theme": "dark",       # dark=暗色 | light=亮色（轮盘主题）
     "result_theme": "light",     # dark=暗色 | light=亮色（翻译结果面板主题）

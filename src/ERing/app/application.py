@@ -41,6 +41,7 @@ from app.log_utils import log
 from app.mouse_hook import MouseHook
 from app.native_hook import NativeHook
 from app.ocr import OcrEngine
+from app.paths import open_in_explorer, recordings_dir
 from app.qtasync import CallbackWorker
 from app.result_window import ResultWindow
 from app.recorder import Recorder
@@ -357,8 +358,7 @@ class ScreenTranslatorApp:
         from app.dpi import logical_to_physical
 
         phys = logical_to_physical(rect)
-        cfg_dir = str(self.cfg["record_dir"]).strip()
-        folder = Path(cfg_dir) if cfg_dir else CONFIG_DIR / "recordings"
+        folder = recordings_dir(self.cfg["record_dir"])
         fmt = self.cfg["record_format"]
         ext = "gif" if fmt == "gif" else "mp4"
         out = folder / f"录屏_{time.strftime('%Y%m%d_%H%M%S')}.{ext}"
@@ -383,13 +383,7 @@ class ScreenTranslatorApp:
 
     def open_record_dir(self):
         """打开录屏文件保存位置（资源管理器）。"""
-        cfg_dir = str(self.cfg["record_dir"]).strip()
-        folder = Path(cfg_dir) if cfg_dir else CONFIG_DIR / "recordings"
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            os.startfile(str(folder))
-        except Exception as exc:  # noqa: BLE001
-            log(f"open record dir failed: {exc}")
+        open_in_explorer(recordings_dir(self.cfg["record_dir"]))
 
     def _stop_recording(self):
         path = self.recorder.stop()
@@ -613,13 +607,6 @@ def main():
     if not _single_instance():
         _notify_already_running(smoke)
         return 0
-    # 幂等：确保 HTTPS 信任库已包含 Windows 系统证书（代理/安全软件环境必需）
-    try:
-        from app.tls import install as install_tls
-
-        install_tls()
-    except Exception:
-        pass
     # 低完整性（沙箱）环境里托盘图标与低层钩子都会被 UIPI 拦截，先明确告知用户
     try:
         from app.integrity import warn_if_sandboxed

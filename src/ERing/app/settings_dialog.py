@@ -38,6 +38,7 @@ from app.autostart import set_enabled as autostart_set_enabled
 from app.deepseek import fetch_balance
 from app.fullscreen import normalize_path
 from app.ocr_install import install_rapid, uninstall_rapid
+from app.paths import open_in_explorer, recordings_dir
 from app.qtasync import AsyncWorker
 from app.tray import make_icon
 from app.updater import check as check_update
@@ -542,9 +543,7 @@ class SettingsDialog(QDialog):
         row.addWidget(lab)
         dir_box = QHBoxLayout()
         dir_box.setSpacing(8)
-        self.rec_dir_edit = QLineEdit(
-            self.cfg["record_dir"].strip() or str(CONFIG_DIR / "recordings")
-        )
+        self.rec_dir_edit = QLineEdit(str(recordings_dir(self.cfg["record_dir"])))
         self.rec_dir_edit.setReadOnly(True)
         browse_btn = QPushButton("浏览…")
         browse_btn.clicked.connect(self._pick_record_dir)
@@ -565,20 +564,13 @@ class SettingsDialog(QDialog):
         return page
 
     def _pick_record_dir(self):
-        start = self.rec_dir_edit.text().strip() or str(CONFIG_DIR / "recordings")
+        start = str(recordings_dir(self.rec_dir_edit.text()))
         d = QFileDialog.getExistingDirectory(self, "选择录屏保存位置", start)
         if d:
             self.rec_dir_edit.setText(d)
 
     def _open_record_dir(self):
-        d = self.rec_dir_edit.text().strip() or str(CONFIG_DIR / "recordings")
-        try:
-            os.makedirs(d, exist_ok=True)
-            os.startfile(d)
-        except Exception as exc:  # noqa: BLE001
-            from app.log_utils import log
-
-            log(f"open record dir failed: {exc}")
+        open_in_explorer(recordings_dir(self.rec_dir_edit.text()))
 
     # ---------- API 页 ----------
 

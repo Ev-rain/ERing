@@ -5,6 +5,7 @@
 - 打包模式：代码在 _MEIPASS 临时目录，资源经 --add-data 打进 _MEIPASS；
   可写数据（data/）放在 exe 所在目录，ffmpeg/钩子 DLL 优先找 exe 目录。
 """
+import os
 import sys
 from pathlib import Path
 
@@ -37,3 +38,29 @@ def repo_root():
 def resource_path(rel):
     """只读资源路径：源码下 app/rel，打包后 _MEIPASS/rel。"""
     return app_dir() / rel
+
+
+def recordings_dir(configured=""):
+    """录屏输出目录：设置里填了就用它，否则落在 <运行根目录>/data/recordings。
+
+    与 config.CONFIG_DIR 保持一致（不能 import config，会形成循环）。
+    """
+    text = str(configured or "").strip()
+    return Path(text) if text else project_root() / "data" / "recordings"
+
+
+def open_in_explorer(path):
+    """在资源管理器里打开目录（顺带建好），失败只记日志，不抛给 UI。"""
+    target = Path(path)
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(target))
+        return True
+    except Exception as exc:  # noqa: BLE001
+        try:
+            from app.log_utils import log
+
+            log(f"open dir failed: {target}: {exc!r}")
+        except Exception:
+            pass
+        return False

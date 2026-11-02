@@ -122,13 +122,6 @@ def fetch_balance(api_key):
     return True, "\n".join(lines)
 
 
-def fetch_balance_short(api_key):
-    ok, data, err = _fetch_data(api_key)
-    if not ok:
-        return False, None
-    return True, format_balance_short(data)
-
-
 class BalanceProvider:
     """后台刷新余额；轮盘圆心显示用。
     今日消费 = 当天最早开启程序时查到的余额 + 当日充值 - 当前余额（持久化跨重启）。"""
