@@ -118,6 +118,7 @@ class ScreenTranslatorApp:
             "on_normal_up": lambda x, y: self.events.put(("normal_up", x, y)),
         }
         self._hook_silent = 0
+        self._hook_dead_logged = False
         self.hook = hook_cls(**self._hook_kwargs)
         self._apply_drag_threshold()
         # 命中名单规则时（黑名单；或全屏且不在白名单，如全屏游戏），钩子于右键按下瞬间
@@ -183,6 +184,18 @@ class ScreenTranslatorApp:
 
     def run(self):
         self.tray.show()
+        # 托盘图标看不到时，日志里至少能看出是"系统没托盘区"还是"图标没显示出来"
+        try:
+            from PySide6.QtWidgets import QSystemTrayIcon
+
+            log(
+                "tray: available="
+                f"{QSystemTrayIcon.isSystemTrayAvailable()} "
+                f"visible={self.tray.isVisible()} "
+                f"icon_null={self.tray.icon().isNull()}"
+            )
+        except Exception:  # noqa: BLE001
+            pass
         self._start_hook()
         self.balance.refresh()
         self.ocr.preload()  # 后台预热 OCR 模型，首次截图不再干等
@@ -559,8 +572,15 @@ class ScreenTranslatorApp:
                         self.hook.start()
                     except Exception as exc:  # noqa: BLE001
                         log(f"python hook start failed: {exc!r}")
+                    log(f"python hook installed: {getattr(self.hook, 'installed', None)}")
                     self._last_hook_events = self.hook.event_count()
                     return
+                if self._hook_silent >= 6 and not self._hook_dead_logged:
+                    self._hook_dead_logged = True
+                    log(
+                        "hook health: 两种钩子都收不到鼠标事件——可能是安全软件/"
+                        "加速器拦截了低层钩子，或本程序不在当前交互桌面"
+                    )
                 try:
                     self.hook.stop()
                 except Exception:
