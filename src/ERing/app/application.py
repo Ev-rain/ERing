@@ -628,6 +628,13 @@ def main():
         install_tls()
     except Exception:
         pass
+    # 低完整性（沙箱）环境里托盘图标与低层钩子都会被 UIPI 拦截，先明确告知用户
+    try:
+        from app.integrity import warn_if_sandboxed
+
+        warn_if_sandboxed(smoke)
+    except Exception:
+        pass
     try:
         app = ScreenTranslatorApp(sys.argv)
         ret = app.run()
