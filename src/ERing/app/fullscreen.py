@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
-"""前台窗口检测：判断独占/全屏应用，供“全屏时隐藏”功能使用。"""
+"""前台窗口检测：判断独占/全屏应用，供“全屏时隐藏”功能使用。
+
+判定逻辑集中在这里的纯函数 `should_suppress(cfg, ...)`：
+黑名单命中一律压制（不论是否全屏），白名单命中则放行，其余按是否全屏决定。
+"""
 import ctypes
+import os
 from ctypes import wintypes
 
 _user32 = ctypes.windll.user32
@@ -32,8 +37,8 @@ class _MONITORINFO(ctypes.Structure):
     ]
 
 
-def foreground_process_name():
-    """返回前台窗口所属进程名（小写 exe 名），获取失败返回空串。"""
+def foreground_process_path():
+    """返回前台窗口所属进程的完整路径，获取失败返回空串。"""
     hwnd = _user32.GetForegroundWindow()
     if not hwnd:
         return ""
@@ -49,12 +54,18 @@ def foreground_process_name():
             buf = ctypes.create_unicode_buffer(1024)
             size = wintypes.DWORD(ctypes.sizeof(buf))
             if _kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-                return buf.value.rsplit("\\", 1)[-1].lower()
+                return buf.value
         finally:
             _kernel32.CloseHandle(h)
     except Exception:
         pass
     return ""
+
+
+def foreground_process_name():
+    """返回前台窗口所属进程名（小写 exe 名），获取失败返回空串。"""
+    path = foreground_process_path()
+    return os.path.basename(path).lower() if path else ""
 
 
 def foreground_is_fullscreen():
@@ -85,17 +96,72 @@ def foreground_is_fullscreen():
         return False
 
 
-def fullscreen_should_hide(whitelist=None):
-    """全屏应用在前台且不在白名单时返回 True（触发“隐藏”）。"""
+def normalize_path(p):
+    """路径归一化：统一分隔符、去掉 ..、忽略大小写（Windows）。"""
+    return os.path.normcase(os.path.normpath(str(p)))
+
+
+def _base_name(p):
+    """取小写 exe 名，去掉空的尾部。"""
+    return os.path.basename(str(p).strip()).lower()
+
+
+def matches_entry(entry, path):
+    """名单条目是否命中给定进程路径。
+
+    条目含路径分隔符时按归一化全路径比较；否则按 exe 基名比较
+    （兼容用户早期手填的 `chrome.exe` / `chrome`）。
+    """
+    e = str(entry or "").strip()
+    p = str(path or "").strip()
+    if not e or not p:
+        return False
+    if os.sep in e or "/" in e:
+        return normalize_path(e) == normalize_path(p)
+    want = _base_name(e)
+    if not want.endswith(".exe"):
+        want += ".exe"
+    return _base_name(p) == want
+
+
+def should_suppress(cfg, path=None, name=None, fullscreen=None):
+    """是否需要压制轮盘（隐藏）。
+
+    判定顺序：黑名单命中 → 压制；「全屏时隐藏」关闭 → 不压制；
+    非全屏 → 不压制；白名单命中 → 不压制；其余（含取不到进程信息）→ 压制。
+    三个可选参数为 None 时现场取前台窗口信息。
+    """
     try:
-        if not foreground_is_fullscreen():
+        cfg = cfg or {}
+        if fullscreen is None:
+            fullscreen = foreground_is_fullscreen()
+        if path is None:
+            path = foreground_process_path()
+        if name is None:
+            name = _base_name(path)
+        # 黑名单独立于「全屏时隐藏」开关：不论是否全屏都不弹轮盘
+        for entry in cfg.get("fullscreen_blacklist") or []:
+            if matches_entry(entry, path) or (
+                not path and name and _base_name(entry) == name
+            ):
+                return True
+        if not bool(cfg.get("suppress_fullscreen", True)):
             return False
-        name = foreground_process_name()
-        if not name:
-            # 识别不到进程名时保守处理：系统窗口通常不满足全屏条件
+        if not fullscreen:
+            return False
+        if not path and not name:
+            # 识别不到前台进程时保守处理：系统窗口通常不满足全屏条件
             return True
-        wl = {str(x).strip().lower().removesuffix(".exe") + ".exe"
-              for x in (whitelist or []) if str(x).strip()}
-        return name not in wl
+        for entry in cfg.get("fullscreen_whitelist") or []:
+            if matches_entry(entry, path):
+                return False
+        return True
     except Exception:
         return False
+
+
+def fullscreen_should_hide(whitelist=None):
+    """兼容旧调用点：全屏应用在前台且不在白名单时返回 True。"""
+    return should_suppress(
+        {"suppress_fullscreen": True, "fullscreen_whitelist": list(whitelist or [])}
+    )
