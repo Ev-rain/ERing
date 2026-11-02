@@ -38,6 +38,7 @@ from app.config import (
 from app.autostart import is_enabled as autostart_enabled
 from app.autostart import set_enabled as autostart_set_enabled
 from app.deepseek import fetch_balance
+from app.fullscreen import normalize_path
 from app.paths import project_root
 from app.tray import make_icon
 from app.version import current as current_version
@@ -711,19 +712,15 @@ class SettingsDialog(QDialog):
         self.fullscreen_check = QCheckBox("全屏/独占应用在前台时隐藏（避免游戏等误触发）")
         self.fullscreen_check.setChecked(bool(self.cfg["suppress_fullscreen"]))
         self._form_row(fsv, "前台隐藏", self.fullscreen_check)
-        wl_text = ", ".join(str(x) for x in (self.cfg["fullscreen_whitelist"] or []))
-        self.fullscreen_edit = QLineEdit(wl_text)
-        self.fullscreen_edit.setPlaceholderText(
-            "例如：vlc.exe, mpv.exe（进程名，逗号分隔）"
+        self.whitelist_list = self._app_list_block(
+            fsv, "白名单（全屏时仍可呼出）", self.cfg["fullscreen_whitelist"],
+            "白名单内的全屏应用仍可呼出轮盘；其余全屏应用在前台时不弹轮盘。",
         )
-        self._form_row(fsv, "白名单", self.fullscreen_edit)
-        fs_hint = QLabel(
-            "白名单内的全屏应用仍可呼出轮盘。进程名可在任务管理器的"
-            "“详细信息”列查看，只填名字即可（如 chrome.exe、vlc.exe）。"
+        self.blacklist_list = self._app_list_block(
+            fsv, "黑名单（任何时候都不弹轮盘）", self.cfg["fullscreen_blacklist"],
+            "黑名单内的应用不论是否全屏都不弹轮盘，不受上面的开关影响；"
+            "程序更新换了安装目录后需要重新添加。",
         )
-        fs_hint.setWordWrap(True)
-        fs_hint.setStyleSheet("color:#94A3B8; font-size:12px;")
-        fsv.addWidget(fs_hint)
         v.addWidget(fs_card)
         
         up_card, up_v = self._card("版本更新")
@@ -745,6 +742,83 @@ class SettingsDialog(QDialog):
 
         v.addStretch(1)
         return page
+
+    # ---------- 全屏应用名单 ----------
+    def _app_list_block(self, parent_layout, label, paths, hint):
+        """生成「标题 + 名单列表 + 添加/移除按钮 + 说明」的竖排块，返回列表控件。"""
+        title = QLabel(label)
+        title.setStyleSheet("color:#E2E8F0; font-size:13px;")
+        parent_layout.addWidget(title)
+
+        widget = QListWidget()
+        widget.setMinimumHeight(96)
+        widget.setStyleSheet(
+            "QListWidget{background:#0F172A; border:1px solid #1E293B;"
+            " border-radius:8px; color:#E2E8F0; padding:4px;}"
+        )
+        self._add_paths(widget, paths or [])
+        parent_layout.addWidget(widget)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        add_btn = QPushButton("添加应用…")
+        add_btn.clicked.connect(lambda: self._pick_apps(widget))
+        remove_btn = QPushButton("移除选中")
+        remove_btn.clicked.connect(lambda: self._remove_selected(widget))
+        row.addWidget(add_btn)
+        row.addWidget(remove_btn)
+        row.addStretch(1)
+        parent_layout.addLayout(row)
+
+        note = QLabel(hint)
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#94A3B8; font-size:12px;")
+        parent_layout.addWidget(note)
+        return widget
+
+    def _pick_apps(self, widget):
+        """用资源管理器挑选 .exe（可多选）加入名单。"""
+        start = getattr(self, "_app_dir", "") or os.environ.get("ProgramFiles", "")
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "选择应用程序", start, "应用程序 (*.exe)"
+        )
+        if not paths:
+            return
+        self._app_dir = os.path.dirname(paths[0])
+        self._add_paths(widget, paths)
+
+    @staticmethod
+    def _remove_selected(widget):
+        """移除列表中选中的项（支持多选）。"""
+        for item in list(widget.selectedItems()):
+            widget.takeItem(widget.row(item))
+
+    @staticmethod
+    def _add_paths(widget, paths):
+        """按归一化路径去重后追加：显示 exe 名，tooltip 与 UserRole 存原始路径。"""
+        seen = {normalize_path(p) for p in SettingsDialog._list_paths(widget)}
+        for raw in paths or []:
+            path = str(raw or "").strip()
+            if not path:
+                continue
+            key = normalize_path(path)
+            if key in seen:
+                continue
+            seen.add(key)
+            item = QListWidgetItem(os.path.basename(path).lower())
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            item.setToolTip(path)
+            widget.addItem(item)
+
+    @staticmethod
+    def _list_paths(widget):
+        """按行序取回列表里的完整路径。"""
+        out = []
+        for i in range(widget.count()):
+            item = widget.item(i)
+            value = item.data(Qt.ItemDataRole.UserRole)
+            out.append(str(value) if value else item.text())
+        return out
 
     # ---------- 底部按钮 ----------
     def _build_buttons(self):
@@ -882,10 +956,8 @@ class SettingsDialog(QDialog):
         self.cfg["enable_outer_escape"] = self.escape_check.isChecked()
         self.cfg["outer_escape_distance"] = self.escape_dist.value()
         self.cfg["suppress_fullscreen"] = self.fullscreen_check.isChecked()
-        raw = self.fullscreen_edit.text().replace("，", ",").replace(" ", ",")
-        self.cfg["fullscreen_whitelist"] = [
-            t.strip().lower() for t in raw.split(",") if t.strip()
-        ]
+        self.cfg["fullscreen_whitelist"] = self._list_paths(self.whitelist_list)
+        self.cfg["fullscreen_blacklist"] = self._list_paths(self.blacklist_list)
         self.cfg["record_fps"] = self.rec_fps.currentData()
         self.cfg["record_mouse"] = self.rec_mouse.isChecked()
         self.cfg["record_format"] = self.rec_fmt.currentData()
