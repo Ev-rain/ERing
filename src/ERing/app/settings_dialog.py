@@ -3,10 +3,8 @@
 只保留本工具需要的功能：翻译 / 轮盘 / DeepSeek / 日志。"""
 import os
 import threading
-import warnings
 import webbrowser
 
-import requests
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -39,8 +37,9 @@ from app.autostart import is_enabled as autostart_enabled
 from app.autostart import set_enabled as autostart_set_enabled
 from app.deepseek import fetch_balance
 from app.fullscreen import normalize_path
-from app.paths import project_root
+from app.ocr_install import install_rapid, uninstall_rapid
 from app.tray import make_icon
+from app.updater import check as check_update
 from app.version import current as current_version
 
 PROVIDERS = [
@@ -206,18 +205,6 @@ class _UpdateWorker(QObject):
 
     def start(self, fn):
         threading.Thread(target=lambda: self.done.emit(fn()), daemon=True).start()
-
-
-def _ver_key(s):
-    """把 v1.2.3 之类版本号转成可比较的整数元组，非法返回 None。"""
-    parts = str(s).strip().lstrip("v").split(".")
-    nums = []
-    for p in parts:
-        if p.isdigit():
-            nums.append(int(p))
-        else:
-            return None
-    return tuple(nums)
 
 
 class SettingsDialog(QDialog):
@@ -494,74 +481,33 @@ class SettingsDialog(QDialog):
             self._install_rapid()
 
     def _install_rapid(self):
-        import subprocess
-        import sys
-        from pathlib import Path
-
-        req = project_root() / "requirements-ocr.txt"
         self.rapid_btn.setEnabled(False)
         self.rapid_status.setText("正在安装（约 1~3 分钟）…")
-
-        def work():
-            try:
-                proc = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "-r", str(req)],
-                    capture_output=True,
-                    text=True,
-                    timeout=900,
-                )
-                ok = proc.returncode == 0
-                detail = (proc.stderr or proc.stdout or "")[-300:]
-                return ok, detail
-            except Exception as exc:  # noqa: BLE001
-                return False, str(exc)
-
         self._rapid_worker = _InstallWorker()
         self._rapid_worker.done.connect(self._on_install_done)
-        self._rapid_worker.start(work)
+        self._rapid_worker.start(install_rapid)
 
     def _uninstall_rapid(self):
-        import subprocess
-        import sys
-
         self.rapid_btn.setEnabled(False)
         self.rapid_status.setText("正在卸载…")
-        packages = [
-            "rapidocr-onnxruntime",
-            "opencv-python",
-            "onnxruntime",
-            "numpy",
-            "shapely",
-        ]
-
-        def work():
-            try:
-                proc = subprocess.run(
-                    [sys.executable, "-m", "pip", "uninstall", "-y", *packages],
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                )
-                ok = proc.returncode == 0
-                detail = (proc.stderr or proc.stdout or "")[-300:]
-                return ok, detail
-            except Exception as exc:  # noqa: BLE001
-                return False, str(exc)
-
         self._rapid_worker = _InstallWorker()
         self._rapid_worker.done.connect(self._on_uninstall_done)
-        self._rapid_worker.start(work)
+        self._rapid_worker.start(uninstall_rapid)
 
     def _on_install_done(self, result):
-        ok, _detail = result
+        ok, detail = result
         if ok:
             self.rapid_status.setText("安装成功 ✓（已启用 RapidOCR 选项）")
             item = self.ocr_engine.model().item(1)
             item.setEnabled(True)
             item.setToolTip("")
             self.rapid_installed = True
+        elif "源码" in detail:
+            # 打包版没有 pip，直接说明正确做法，而不是让用户去查网络
+            self.rapid_status.setText(detail)
         else:
             self.rapid_status.setText("安装失败，请检查网络后重试")
+            self.rapid_status.setToolTip(detail or "")
         self._refresh_rapid_ui()
 
     def _on_uninstall_done(self, result):
@@ -883,61 +829,37 @@ class SettingsDialog(QDialog):
         self._update_worker.start(self._fetch_latest_release)
 
     def _fetch_latest_release(self):
-        """查询 GitHub 最新 release 的版本号，返回 (ok, tag, date, url)。"""
-        try:
-            resp = self._github_get(
-                "https://api.github.com/repos/Ev-rain/ERing/releases/latest"
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            tag = str(data.get("tag_name", "")).strip()
-            published = str(data.get("published_at", "")).strip()
-            html = str(data.get("html_url", "")).strip()
-            return ("ok", tag, published, html)
-        except Exception as e:
-            return ("error", str(e))
+        """查询 GitHub 最新 release 并与当前版本比较（网络与判定都在 app.updater）。"""
+        return check_update(current_version()[0])
 
-    @staticmethod
-    def _github_get(url):
-        """读取 GitHub 公共版本信息；部分环境证书链不全（代理/杀软）时退回不校验。
-        仅用于版本检查，不含敏感数据。"""
+    def _on_update_result(self, info):
         try:
-            return requests.get(url, timeout=15)
-        except requests.exceptions.SSLError:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                return requests.get(url, timeout=15, verify=False)
-
-    def _on_update_result(self, result):
-        try:
-            if result[0] == "error":
-                self.update_status.setText(f"检查失败：{result[1]}")
+            status = getattr(info, "status", "error")
+            if status == "error":
+                self.update_status.setText(f"检查失败：{getattr(info, 'message', '')}")
                 return
-            _, tag, published, html = result
-            if not tag:
+            if status == "no_tag":
                 self.update_status.setText("未获取到最新版本")
                 return
-            pub = (published or "")[:10] or "—"
-            latest_key = _ver_key(tag)
-            if latest_key is None:
-                self.update_status.setText("无法解析最新版本号")
-                return
-            cur_key = _ver_key(current_version()[0])
-            if cur_key is not None and latest_key > cur_key:
+            pub = info.date or "—"
+            if status == "update":
                 # 只有确实更新的发布版才提示并打开下载页
-                self.update_status.setText(f"发现新版本 {tag}（发布于 {pub}），已打开下载页面")
-                if html:
+                self.update_status.setText(
+                    f"发现新版本 {info.tag}（发布于 {pub}），已打开下载页面"
+                )
+                if info.url:
                     try:
-                        webbrowser.open(html)
+                        webbrowser.open(info.url)
                     except Exception:
                         pass
                 return
-            if cur_key is not None and latest_key < cur_key:
+            if status == "remote_older":
                 # 当前版本比 GitHub 最新发布还新（可能该版本尚未发布）
-                self.update_status.setText(f"当前版本已是最新（GitHub 最新发布 {tag}）")
+                self.update_status.setText(
+                    f"当前版本已是最新（GitHub 最新发布 {info.tag}）"
+                )
                 return
-            # latest_key == cur_key：恰好一致
-            self.update_status.setText(f"已是最新版本 {tag}（发布于 {pub}）")
+            self.update_status.setText(f"已是最新版本 {info.tag}（发布于 {pub}）")
         except Exception:
             self.update_status.setText("检查更新发生异常")
         finally:
