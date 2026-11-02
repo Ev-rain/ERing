@@ -86,6 +86,25 @@ def test_config_always_gives_lists():
     assert c["fullscreen_blacklist"] == [r"C:\a.exe"]   # 剥空白、丢空串
 
 
+def test_real_config_object_is_accepted():
+    """接线回归：生产传的是 Config 对象（只有 __getitem__），不是 dict。"""
+    import app.config as config
+
+    c = config.Config()
+    c.data["fullscreen_blacklist"] = [OBS]
+    c.data["fullscreen_whitelist"] = []
+    c.data["suppress_fullscreen"] = True
+    assert should_suppress(c, path=OBS, fullscreen=False) is True
+    assert should_suppress(c, path=OBS, fullscreen=True) is True
+
+    c.data["fullscreen_blacklist"] = []
+    assert should_suppress(c, path=CHROME, fullscreen=True) is True
+    assert should_suppress(c, path=CHROME, fullscreen=False) is False
+
+    c.data["suppress_fullscreen"] = False
+    assert should_suppress(c, path=CHROME, fullscreen=True) is False
+
+
 if __name__ == "__main__":
     test_blacklist_suppresses_regardless_of_fullscreen()
     test_blacklist_ignores_master_switch()
@@ -97,4 +116,5 @@ if __name__ == "__main__":
     test_unknown_foreground_is_conservative_only_when_fullscreen()
     test_chinese_and_space_in_path()
     test_config_always_gives_lists()
+    test_real_config_object_is_accepted()
     print("ALL TESTS PASSED")

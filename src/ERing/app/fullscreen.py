@@ -124,6 +124,31 @@ def matches_entry(entry, path):
     return _base_name(p) == want
 
 
+def _cfg_mapping(cfg):
+    """兼容两种配置形态：普通 dict 与 `app.config.Config`（只有 __getitem__）。"""
+    data = getattr(cfg, "data", None)
+    if isinstance(data, dict):
+        return data
+    return cfg if isinstance(cfg, dict) else {}
+
+
+_warned = False
+
+
+def _log_once(exc):
+    """判定失败只记一次日志，避免 300ms 轮询刷屏。"""
+    global _warned
+    if _warned:
+        return
+    _warned = True
+    try:
+        from app.log_utils import log
+
+        log(f"should_suppress failed: {exc!r}")
+    except Exception:
+        pass
+
+
 def should_suppress(cfg, path=None, name=None, fullscreen=None):
     """是否需要压制轮盘（隐藏）。
 
@@ -132,7 +157,7 @@ def should_suppress(cfg, path=None, name=None, fullscreen=None):
     三个可选参数为 None 时现场取前台窗口信息。
     """
     try:
-        cfg = cfg or {}
+        cfg = _cfg_mapping(cfg)
         if fullscreen is None:
             fullscreen = foreground_is_fullscreen()
         if path is None:
@@ -156,7 +181,8 @@ def should_suppress(cfg, path=None, name=None, fullscreen=None):
             if matches_entry(entry, path):
                 return False
         return True
-    except Exception:
+    except Exception as exc:
+        _log_once(exc)
         return False
 
 

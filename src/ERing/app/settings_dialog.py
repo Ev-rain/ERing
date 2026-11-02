@@ -805,7 +805,7 @@ class SettingsDialog(QDialog):
             if key in seen:
                 continue
             seen.add(key)
-            item = QListWidgetItem(os.path.basename(path).lower())
+            item = QListWidgetItem(os.path.basename(path))
             item.setData(Qt.ItemDataRole.UserRole, path)
             item.setToolTip(path)
             widget.addItem(item)

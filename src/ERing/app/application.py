@@ -35,7 +35,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QWidget
 from app.config import Config, CONFIG_DIR
 from app.deepseek import BalanceProvider
 from app.dpi import phys_to_logical, primary_dpr
-from app.fullscreen import should_suppress
+from app.fullscreen import foreground_is_fullscreen, should_suppress
 from app.log_utils import configure as configure_logging
 from app.log_utils import log
 from app.mouse_hook import MouseHook
@@ -115,8 +115,8 @@ class ScreenTranslatorApp:
             on_normal_up=lambda x, y: self.events.put(("normal_up", x, y)),
         )
         self._apply_drag_threshold()
-        # 前台为独占/全屏且不在白名单（如全屏游戏）时，钩子于右键按下瞬间放行真实点击，
-        # 不吞、不注入、不弹轮盘 —— 对齐 StarPie CheckIsIsolated，避免反作弊误判。
+        # 命中名单规则时（黑名单；或全屏且不在白名单，如全屏游戏），钩子于右键按下瞬间
+        # 放行真实点击：不吞、不注入、不弹轮盘 —— 对齐 StarPie CheckIsIsolated，避免反作弊误判。
         self.hook.set_isolated_check(self._app_suppressed)
 
         self.wheel = WheelOverlay()
@@ -155,7 +155,13 @@ class ScreenTranslatorApp:
         self.ocr.preload()  # 后台预热 OCR 模型，首次截图不再干等
         self.tray.first_run_notice()
         if "--smoke" in sys.argv:
-            QTimer.singleShot(4000, self.qt.quit)
+            # 冒烟时显式跑一次判定，确保接线（Config 对象 -> should_suppress）真的被执行
+            def _smoke_probe():
+                log(f"smoke suppress -> {self._app_suppressed()}")
+                log(f"smoke fullscreen -> {foreground_is_fullscreen()}")
+                self.qt.quit()
+
+            QTimer.singleShot(1500, _smoke_probe)
         return self.qt.exec()
 
     # ---------- 钩子线程 -> Qt 主线程 ----------
@@ -237,7 +243,7 @@ class ScreenTranslatorApp:
                     self.toast.hide()
                 except Exception:
                     pass
-            log(f"fullscreen suppress -> {target}")
+            log(f"app suppress -> {target}")
 
     # ---------- 轮盘动作 ----------
     def on_action(self, index):
