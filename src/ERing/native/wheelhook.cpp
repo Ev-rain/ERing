@@ -34,6 +34,9 @@ static volatile bool g_ignore_up = false;
 static volatile LONG g_event_count = 0;
 static volatile LONG g_suppress = 0;
 static IsolatedCb g_isolated = nullptr;
+// 钩子安装结果：线程里 SetWindowsHookExW 失败时记录错误码，供上层判断/回退
+static volatile LONG g_ready = 0;      // 安装尝试已结束（成功或失败）
+static volatile LONG g_hook_error = 0; // SetWindowsHookExW 的 GetLastError()
 
 #define LLMHF_INJECTED 0x00000001
 #define WATCHDOG_MS 10000
@@ -143,6 +146,8 @@ static LRESULT CALLBACK hook_proc(int nCode, WPARAM wParam, LPARAM lParam) {
 static DWORD WINAPI hook_thread(LPVOID) {
     g_tid = GetCurrentThreadId();
     g_hook = SetWindowsHookExW(WH_MOUSE_LL, hook_proc, nullptr, 0);
+    g_hook_error = g_hook ? 0 : GetLastError();
+    InterlockedExchange(&g_ready, 1);
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
         TranslateMessage(&msg);
@@ -168,8 +173,13 @@ extern "C" __declspec(dllexport) void configure(
 extern "C" __declspec(dllexport) int start_hook(
     TriggerCb t, ReleaseCb r, NormalUpCb n, LeftClickCb l, MoveCb m) {
     configure(t, r, n, l, m);
+    InterlockedExchange(&g_ready, 0);
+    g_hook_error = 0;
     g_thread = CreateThread(nullptr, 0, hook_thread, nullptr, 0, nullptr);
-    return g_thread ? 1 : 0;
+    if (!g_thread) return 0;
+    // 等钩子线程报告安装结果；只创建线程成功不代表钩子装上了
+    for (int i = 0; i < 60 && !g_ready; ++i) Sleep(5);
+    return (g_hook && g_ready) ? 1 : 0;
 }
 
 extern "C" __declspec(dllexport) void stop_hook() {
@@ -207,6 +217,16 @@ extern "C" __declspec(dllexport) void set_ignore_next_click() {
 
 extern "C" __declspec(dllexport) long get_event_count() {
     return g_event_count;
+}
+
+// 钩子当前是否真的挂在系统里（上层据此决定是否回退到 Python 钩子）
+extern "C" __declspec(dllexport) int is_hooked() {
+    return g_hook ? 1 : 0;
+}
+
+// SetWindowsHookExW 的失败码（0 = 没失败）
+extern "C" __declspec(dllexport) unsigned long get_hook_error() {
+    return (unsigned long)g_hook_error;
 }
 
 // 测试用：模拟消息，返回 1 表示该事件会被吞掉

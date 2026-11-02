@@ -46,6 +46,7 @@ class NativeHook:
         self.suppress = False
         self._isolated_check = None
         self._iso_cb = None
+        self.installed = False  # 钩子是否真的挂到系统里（start 之后才知道）
 
     @classmethod
     def available(cls):
@@ -71,7 +72,30 @@ class NativeHook:
             self._dll.debug_feed.argtypes = [
                 ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
             ]
+            # 老版本 DLL 没有这两个导出；有则用来判断钩子是否真的装上
+            if hasattr(self._dll, "is_hooked"):
+                self._dll.is_hooked.restype = ctypes.c_int
+            if hasattr(self._dll, "get_hook_error"):
+                self._dll.get_hook_error.restype = ctypes.c_ulong
         return self._dll
+
+    def is_hooked(self):
+        """钩子当前是否真的安装在系统里（老 DLL 无法判断时返回 False）。"""
+        try:
+            if self._dll is not None and hasattr(self._dll, "is_hooked"):
+                return bool(self._dll.is_hooked())
+        except Exception:
+            pass
+        return False
+
+    def hook_error(self):
+        """SetWindowsHookExW 的失败码，0 表示没失败。"""
+        try:
+            if self._dll is not None and hasattr(self._dll, "get_hook_error"):
+                return int(self._dll.get_hook_error())
+        except Exception:
+            pass
+        return 0
 
     def set_drag_threshold(self, px):
         self._threshold = max(4, int(px))
@@ -120,7 +144,13 @@ class NativeHook:
         dll.set_isolated(self._iso_cb)
         self.set_suppress(self.suppress)
         ok = dll.start_hook(*self._cbs)
+        self.installed = bool(ok)
         log(f"native hook start: {bool(ok)}")
+        if not self.installed:
+            log(
+                "native hook install failed: winerror="
+                f"{self.hook_error()}（钩子没挂上，自动回退 Python 钩子）"
+            )
 
     def stop(self):
         if self._dll:

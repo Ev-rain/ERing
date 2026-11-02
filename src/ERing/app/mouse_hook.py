@@ -75,6 +75,7 @@ class MouseHook:
         self._event_count = 0
         self.suppress = False
         self._isolated_check = None
+        self.installed = False  # SetWindowsHookExW 是否成功（在钩子线程里确定）
 
     def set_drag_threshold(self, px):
         self._threshold2 = max(4, int(px)) ** 2
@@ -96,8 +97,14 @@ class MouseHook:
     def start(self):
         if self._thread and self._thread.is_alive():
             return
+        self.installed = False
         self._thread = threading.Thread(target=self._run, name="mouse-hook", daemon=True)
         self._thread.start()
+        # 等钩子线程把安装结果写出来（最多 ~0.3s），上层据此判断要不要提示失败
+        for _ in range(30):
+            if self.installed or not self._thread.is_alive():
+                break
+            time.sleep(0.01)
 
     def stop(self):
         if self._hook:
@@ -117,7 +124,9 @@ class MouseHook:
         self._proc_ref = LowLevelMouseProc(self._proc)
         self._hook = user32.SetWindowsHookExW(WH_MOUSE_LL, self._proc_ref, None, 0)
         if not self._hook:
+            self.installed = False
             return
+        self.installed = True
         msg = wintypes.MSG()
         while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
             user32.TranslateMessage(ctypes.byref(msg))

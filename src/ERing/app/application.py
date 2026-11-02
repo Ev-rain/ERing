@@ -107,13 +107,18 @@ class ScreenTranslatorApp:
 
         hook_cls = NativeHook if NativeHook.available() else MouseHook
         log(f"hook backend: {'native C++' if hook_cls is NativeHook else 'python'}")
-        self.hook = hook_cls(
-            on_wheel_trigger=lambda x, y, ox, oy: self.events.put(("trigger", x, y, ox, oy)),
-            on_wheel_release=lambda x, y: self.events.put(("release", x, y)),
-            on_left_click=lambda x, y: self.events.put(("left_click", x, y)),
-            on_mouse_move=lambda x, y: self.events.put(("mousemove", x, y)),
-            on_normal_up=lambda x, y: self.events.put(("normal_up", x, y)),
-        )
+        # 回调集中在 _hook_kwargs：原生钩子失败回退 Python 钩子时直接复用
+        self._hook_kwargs = {
+            "on_wheel_trigger": lambda x, y, ox, oy: self.events.put(
+                ("trigger", x, y, ox, oy)
+            ),
+            "on_wheel_release": lambda x, y: self.events.put(("release", x, y)),
+            "on_left_click": lambda x, y: self.events.put(("left_click", x, y)),
+            "on_mouse_move": lambda x, y: self.events.put(("mousemove", x, y)),
+            "on_normal_up": lambda x, y: self.events.put(("normal_up", x, y)),
+        }
+        self._hook_silent = 0
+        self.hook = hook_cls(**self._hook_kwargs)
         self._apply_drag_threshold()
         # 命中名单规则时（黑名单；或全屏且不在白名单，如全屏游戏），钩子于右键按下瞬间
         # 放行真实点击：不吞、不注入、不弹轮盘 —— 对齐 StarPie CheckIsIsolated，避免反作弊误判。
@@ -148,9 +153,37 @@ class ScreenTranslatorApp:
         self._fs_suppressing = False
 
     # ---------- 入口 ----------
+    def _start_hook(self):
+        """启动钩子：原生钩子装不上就回退纯 Python 钩子，别让程序静默失灵。"""
+        if isinstance(self.hook, NativeHook):
+            try:
+                self.hook.start()
+            except Exception as exc:  # noqa: BLE001
+                log(f"native hook start raised: {exc!r}")
+            if getattr(self.hook, "installed", False):
+                return
+            log(
+                "native hook 没装上（winerror="
+                f"{self.hook.hook_error()}）-> 改用纯 Python 钩子"
+            )
+            try:
+                self.hook.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            self.hook = MouseHook(**self._hook_kwargs)
+            self._apply_drag_threshold()
+            self.hook.set_isolated_check(self._app_suppressed)
+        try:
+            self.hook.start()
+        except Exception as exc:  # noqa: BLE001
+            log(f"hook start failed: {exc!r}")
+            return
+        if not getattr(self.hook, "installed", True):
+            log("钩子没能装进系统，右键轮盘手势将不可用")
+
     def run(self):
         self.tray.show()
-        self.hook.start()
+        self._start_hook()
         self.balance.refresh()
         self.ocr.preload()  # 后台预热 OCR 模型，首次截图不再干等
         self.tray.first_run_notice()
@@ -506,12 +539,35 @@ class ScreenTranslatorApp:
             self._last_cursor = cur
             events = self.hook.event_count()
             if events == self._last_hook_events:
-                log("hook health: cursor moved but hook silent -> restart hook")
+                self._hook_silent += 1
+                log(
+                    "hook health: cursor moved but hook silent "
+                    f"(x{self._hook_silent}) -> restart hook"
+                )
+                # 原生钩子连续三次收不到事件：与其无限重启，不如换成 Python 钩子
+                if self._hook_silent >= 3 and isinstance(self.hook, NativeHook):
+                    log("hook health: 原生钩子始终没有事件 -> 改用纯 Python 钩子")
+                    self._hook_silent = 0
+                    try:
+                        self.hook.stop()
+                    except Exception:  # noqa: BLE001
+                        pass
+                    self.hook = MouseHook(**self._hook_kwargs)
+                    self._apply_drag_threshold()
+                    self.hook.set_isolated_check(self._app_suppressed)
+                    try:
+                        self.hook.start()
+                    except Exception as exc:  # noqa: BLE001
+                        log(f"python hook start failed: {exc!r}")
+                    self._last_hook_events = self.hook.event_count()
+                    return
                 try:
                     self.hook.stop()
                 except Exception:
                     pass
                 self.hook.start()
+            else:
+                self._hook_silent = 0
             self._last_hook_events = events
         except Exception:
             pass
@@ -522,8 +578,28 @@ def _single_instance():
     return kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
 
 
+def _notify_already_running(smoke=False):
+    """已经有一个实例在托盘里时，别静默退出——否则用户会以为程序坏了。"""
+    if smoke:
+        log("another instance is already running")
+        return
+    try:
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            "ERing 已经在运行。\n\n"
+            "它常驻系统托盘，请到任务栏右下角的托盘图标处操作"
+            "（找不到就点一下 ^ 展开隐藏的图标）。",
+            "ERing 正在运行",
+            0x00000040,  # MB_ICONINFORMATION
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main():
+    smoke = "--smoke" in sys.argv
     if not _single_instance():
+        _notify_already_running(smoke)
         return 0
     # 幂等：确保 HTTPS 信任库已包含 Windows 系统证书（代理/安全软件环境必需）
     try:
