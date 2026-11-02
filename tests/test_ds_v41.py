@@ -8,6 +8,29 @@ import os
 import sys
 from pathlib import Path
 
+
+def _utf8_console():
+    """中文 Windows 控制台默认 cp936，打印 ¥ 这类字符会 UnicodeEncodeError。
+
+    能切 UTF-8 控制台代码页就切（Git Bash / Windows Terminal 都是 UTF-8），
+    切不动时至少用 errors="replace" 兜底，别让测试因为编码崩掉。
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+        except Exception:
+            pass
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
+_utf8_console()
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "ERing"))
 
 import app.config as config  # noqa: E402
