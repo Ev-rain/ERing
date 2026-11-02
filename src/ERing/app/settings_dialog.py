@@ -38,6 +38,7 @@ from app.autostart import set_enabled as autostart_set_enabled
 from app.deepseek import fetch_balance
 from app.fullscreen import normalize_path
 from app.ocr_install import install_rapid, uninstall_rapid
+from app.qtasync import AsyncWorker
 from app.tray import make_icon
 from app.updater import check as check_update
 from app.version import current as current_version
@@ -193,20 +194,6 @@ class _BalanceWorker(QObject):
     done = Signal(object)
 
 
-class _InstallWorker(QObject):
-    done = Signal(object)
-
-    def start(self, fn):
-        threading.Thread(target=lambda: self.done.emit(fn()), daemon=True).start()
-
-
-class _UpdateWorker(QObject):
-    done = Signal(object)
-
-    def start(self, fn):
-        threading.Thread(target=lambda: self.done.emit(fn()), daemon=True).start()
-
-
 class SettingsDialog(QDialog):
     def __init__(self, cfg, parent=None, balance_provider=None):
         super().__init__(parent)
@@ -245,7 +232,7 @@ class SettingsDialog(QDialog):
 
         self._balance_worker = _BalanceWorker()
         self._balance_worker.done.connect(self._on_balance_result)
-        self._update_worker = _UpdateWorker()
+        self._update_worker = AsyncWorker()
         self._update_worker.done.connect(self._on_update_result)
 
     # ---------- 左侧导航 ----------
@@ -483,14 +470,14 @@ class SettingsDialog(QDialog):
     def _install_rapid(self):
         self.rapid_btn.setEnabled(False)
         self.rapid_status.setText("正在安装（约 1~3 分钟）…")
-        self._rapid_worker = _InstallWorker()
+        self._rapid_worker = AsyncWorker()
         self._rapid_worker.done.connect(self._on_install_done)
         self._rapid_worker.start(install_rapid)
 
     def _uninstall_rapid(self):
         self.rapid_btn.setEnabled(False)
         self.rapid_status.setText("正在卸载…")
-        self._rapid_worker = _InstallWorker()
+        self._rapid_worker = AsyncWorker()
         self._rapid_worker.done.connect(self._on_uninstall_done)
         self._rapid_worker.start(uninstall_rapid)
 

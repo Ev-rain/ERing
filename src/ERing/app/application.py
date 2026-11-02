@@ -41,6 +41,7 @@ from app.log_utils import log
 from app.mouse_hook import MouseHook
 from app.native_hook import NativeHook
 from app.ocr import OcrEngine
+from app.qtasync import CallbackWorker
 from app.result_window import ResultWindow
 from app.recorder import Recorder
 from app.screenshot import ScreenshotOverlay
@@ -52,22 +53,6 @@ from app.translate import translate_text
 from app.tray import Tray, make_icon
 from app.wheel import ANIM_SPEED_MS, WheelOverlay
 from app.window_icon import apply_to_window, set_app_user_model_id
-
-
-class Worker(QObject):
-    """在工作线程执行任务，结果安全地回到 Qt 主线程。"""
-
-    done = Signal(object)
-
-    def run(self, fn, callback):
-        def target():
-            try:
-                result = fn()
-            except Exception as exc:  # noqa: BLE001
-                result = ("error", str(exc))
-            self.done.emit((callback, result))
-
-        threading.Thread(target=target, daemon=True).start()
 
 
 class _WindowIconFilter(QObject):
@@ -99,7 +84,7 @@ class ScreenTranslatorApp:
             get_key=lambda: self.cfg["deepseek"]["api_key"],
             on_update=lambda: self.events.put(("balance",)),
         )
-        self.worker = Worker()
+        self.worker = CallbackWorker()
         self.worker.done.connect(self._on_worker_done)
         self.ocr = OcrEngine(engine=self.cfg["ocr_engine"])
         self._busy = False
@@ -119,11 +104,8 @@ class ScreenTranslatorApp:
         }
         self._hook_silent = 0
         self._hook_dead_logged = False
-        self.hook = hook_cls(**self._hook_kwargs)
-        self._apply_drag_threshold()
-        # 命中名单规则时（黑名单；或全屏且不在白名单，如全屏游戏），钩子于右键按下瞬间
-        # 放行真实点击：不吞、不注入、不弹轮盘 —— 对齐 StarPie CheckIsIsolated，避免反作弊误判。
-        self.hook.set_isolated_check(self._app_suppressed)
+        self._fs_suppressing = False
+        self._install_hook(hook_cls(**self._hook_kwargs))
 
         self.wheel = WheelOverlay()
         self.wheel.action_chosen.connect(self.on_action)
@@ -151,9 +133,21 @@ class ScreenTranslatorApp:
         self._fs_suppress_timer = QTimer()
         self._fs_suppress_timer.timeout.connect(self._sync_app_suppress)
         self._fs_suppress_timer.start(300)
-        self._fs_suppressing = False
 
     # ---------- 入口 ----------
+    def _install_hook(self, hook):
+        """换上新钩子，并把当前状态补齐。
+
+        回退/重启时如果只补阈值和放行判定，新钩子会丢掉"当前该不该压制"这个状态，
+        全屏游戏里右键拖动又会被吞并弹出轮盘（`_sync_app_suppress` 只在状态变化时才下发）。
+        """
+        self.hook = hook
+        self._apply_drag_threshold()
+        # 命中名单规则时（黑名单；或全屏且不在白名单，如全屏游戏），钩子于右键按下瞬间
+        # 放行真实点击：不吞、不注入、不弹轮盘 —— 对齐 StarPie CheckIsIsolated，避免反作弊误判。
+        self.hook.set_isolated_check(self._app_suppressed)
+        self.hook.set_suppress(self._fs_suppressing)
+
     def _start_hook(self):
         """启动钩子：原生钩子装不上就回退纯 Python 钩子，别让程序静默失灵。"""
         if isinstance(self.hook, NativeHook):
@@ -171,9 +165,7 @@ class ScreenTranslatorApp:
                 self.hook.stop()
             except Exception:  # noqa: BLE001
                 pass
-            self.hook = MouseHook(**self._hook_kwargs)
-            self._apply_drag_threshold()
-            self.hook.set_isolated_check(self._app_suppressed)
+            self._install_hook(MouseHook(**self._hook_kwargs))
         try:
             self.hook.start()
         except Exception as exc:  # noqa: BLE001
@@ -518,8 +510,10 @@ class ScreenTranslatorApp:
         callback, result = payload
         try:
             callback(result)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            log(f"callback failed: {exc!r}\n{traceback.format_exc()}")
             self._busy = False
+            self._show_toast("操作失败，详情见日志")
 
     def _show_toast(self, text, ms=1800):
         self.toast.show_message(text, ms)
@@ -565,9 +559,7 @@ class ScreenTranslatorApp:
                         self.hook.stop()
                     except Exception:  # noqa: BLE001
                         pass
-                    self.hook = MouseHook(**self._hook_kwargs)
-                    self._apply_drag_threshold()
-                    self.hook.set_isolated_check(self._app_suppressed)
+                    self._install_hook(MouseHook(**self._hook_kwargs))
                     try:
                         self.hook.start()
                     except Exception as exc:  # noqa: BLE001
@@ -589,8 +581,8 @@ class ScreenTranslatorApp:
             else:
                 self._hook_silent = 0
             self._last_hook_events = events
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"hook health check failed: {exc!r}")
 
 def _single_instance():
     kernel32 = ctypes.windll.kernel32

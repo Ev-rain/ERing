@@ -106,7 +106,8 @@ class MouseHook:
                 break
             time.sleep(0.01)
 
-    def stop(self):
+    def stop(self, timeout=1.0):
+        """卸载钩子并等线程退出；不 join 的话紧接着的 start() 会因线程还活着而空转。"""
         if self._hook:
             try:
                 user32.UnhookWindowsHookEx(self._hook)
@@ -118,6 +119,12 @@ class MouseHook:
                 user32.PostThreadMessageW(self._tid, WM_QUIT, 0, 0)
             except Exception:
                 pass
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout)
+        self._thread = None
+        self._tid = None
+        self.installed = False
 
     def _run(self):
         self._tid = kernel32.GetCurrentThreadId()

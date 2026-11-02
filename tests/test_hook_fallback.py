@@ -100,11 +100,82 @@ def test_mouse_hook_exposes_installed():
     print("ok: Python 兜底钩子 installed=True")
 
 
+def test_mouse_hook_stop_releases_thread():
+    """stop() 必须把线程等干净，否则紧接着的 start() 会因为线程还活着而静默空转。"""
+    hook = MouseHook()
+    hook.start()
+    for _ in range(20):
+        if hook.installed:
+            break
+        time.sleep(0.05)
+    hook.stop()
+    assert hook._thread is None, "stop() 之后要清掉线程引用"
+    assert hook.installed is False, "stop() 之后 installed 必须复位"
+    hook.start()
+    for _ in range(20):
+        if hook.installed:
+            break
+        time.sleep(0.05)
+    assert hook.installed is True, "停掉之后必须能重新装上"
+    hook.stop()
+    print("ok: MouseHook.stop() 释放线程并能重新启动")
+
+
+class _FakeHook:
+    def __init__(self):
+        self.suppress = None
+        self.isolated = None
+        self.started = False
+
+    def set_drag_threshold(self, px):
+        pass
+
+    def set_suppress(self, value):
+        self.suppress = bool(value)
+
+    def set_isolated_check(self, fn):
+        self.isolated = fn
+
+    def start(self):
+        self.started = True
+
+
+class _FakeApp:
+    """只提供 _install_hook 用得到的成员，不构造整个 Qt 应用。"""
+
+    def __init__(self, suppressing):
+        self.hook = None
+        self._fs_suppressing = suppressing
+        self.threshold_applied = 0
+
+    def _apply_drag_threshold(self):
+        self.threshold_applied += 1
+
+    def _app_suppressed(self):
+        return False
+
+
+def test_install_hook_carries_suppress_state():
+    """回退/重启换钩子时，必须把当前的压制状态一起下发，否则全屏里又会吞右键。"""
+    from app.application import ScreenTranslatorApp
+
+    app = _FakeApp(suppressing=True)
+    hook = _FakeHook()
+    ScreenTranslatorApp._install_hook(app, hook)
+    assert app.hook is hook
+    assert app.threshold_applied == 1
+    assert hook.suppress is True, "新钩子必须继承「当前该压制」的状态"
+    assert hook.isolated is not None, "放行判定也要一并装上"
+    print("ok: _install_hook 补齐 suppressing / isolated_check")
+
+
 def main():
     test_dll_exposes_hook_probe()
     test_native_hook_reports_failure()
     test_native_hook_reports_success()
     test_mouse_hook_exposes_installed()
+    test_mouse_hook_stop_releases_thread()
+    test_install_hook_carries_suppress_state()
     print("ALL TESTS PASSED")
 
 
