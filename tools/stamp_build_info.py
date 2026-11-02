@@ -43,15 +43,20 @@ def _read_version_file():
 
 
 def resolve_version():
+    """版本号来源优先级：ERING_VERSION 环境变量 > VERSION 文件 > 最近的 git tag。
+
+    VERSION 文件是本项目版本号的唯一事实来源；旧 tag（如 v1.1.0）可能还没跟上，
+    若先取 tag，打出来的包会一直显示旧版本号。
+    """
     v = os.environ.get("ERING_VERSION", "").strip()
     if v:
         return v
-    tag = _git("describe", "--tags", "--abbrev=0")
-    if tag:
-        return tag
     file_v, _ = _read_version_file()
     if file_v:
         return file_v
+    tag = _git("describe", "--tags", "--abbrev=0")
+    if tag:
+        return tag
     return "dev"
 
 
