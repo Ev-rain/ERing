@@ -35,7 +35,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QWidget
 from app.config import Config, CONFIG_DIR
 from app.deepseek import BalanceProvider
 from app.dpi import phys_to_logical, primary_dpr
-from app.fullscreen import fullscreen_should_hide
+from app.fullscreen import should_suppress
 from app.log_utils import configure as configure_logging
 from app.log_utils import log
 from app.mouse_hook import MouseHook
@@ -117,7 +117,7 @@ class ScreenTranslatorApp:
         self._apply_drag_threshold()
         # 前台为独占/全屏且不在白名单（如全屏游戏）时，钩子于右键按下瞬间放行真实点击，
         # 不吞、不注入、不弹轮盘 —— 对齐 StarPie CheckIsIsolated，避免反作弊误判。
-        self.hook.set_isolated_check(self._fullscreen_suppressed)
+        self.hook.set_isolated_check(self._app_suppressed)
 
         self.wheel = WheelOverlay()
         self.wheel.action_chosen.connect(self.on_action)
@@ -143,7 +143,7 @@ class ScreenTranslatorApp:
         self._health_timer.timeout.connect(self._check_hook_health)
         self._health_timer.start(3000)
         self._fs_suppress_timer = QTimer()
-        self._fs_suppress_timer.timeout.connect(self._sync_fullscreen_suppress)
+        self._fs_suppress_timer.timeout.connect(self._sync_app_suppress)
         self._fs_suppress_timer.start(300)
         self._fs_suppressing = False
 
@@ -166,8 +166,8 @@ class ScreenTranslatorApp:
                 kind = ev[0]
                 if kind == "trigger":
                     if not self._busy:
-                        if self._fullscreen_suppressed():
-                            # 全屏/独占应用在前台且不在白名单：不弹轮盘，
+                        if self._app_suppressed():
+                            # 命中黑名单，或全屏/独占且不在白名单：不弹轮盘，
                             # 把右键单击补发给原程序，避免游戏等被误触发
                             self._replay_right_click()
                             return
@@ -211,21 +211,17 @@ class ScreenTranslatorApp:
         except queue.Empty:
             pass
 
-    def _fullscreen_suppressed(self):
+    def _app_suppressed(self):
+        """右键按下瞬间：命中名单规则时放行真实点击（不吞、不注入、不弹轮盘）。"""
         try:
-            if not self.cfg["suppress_fullscreen"]:
-                return False
-            return fullscreen_should_hide(self.cfg["fullscreen_whitelist"])
+            return bool(should_suppress(self.cfg))
         except Exception:
             return False
 
-    def _sync_fullscreen_suppress(self):
-        """轮询前台：全屏/独占应用且不在白名单时，让钩子整体放行（暂停运行）。"""
+    def _sync_app_suppress(self):
+        """轮询前台：白名单/黑名单 + 全屏判定决定是否让钩子整体放行（暂停运行）。"""
         try:
-            target = bool(
-                self.cfg["suppress_fullscreen"]
-                and fullscreen_should_hide(self.cfg["fullscreen_whitelist"])
-            )
+            target = bool(should_suppress(self.cfg))
         except Exception:
             target = False
         if target != self._fs_suppressing:
